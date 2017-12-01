@@ -1,10 +1,9 @@
 /*
-	Go Language Raspberry Pi Interface
-	(c) Copyright David Thorpe 2016-2017
+	InfluxDB client
+	(c) Copyright David Thorpe 2017
 	All Rights Reserved
 
-    Documentation http://djthorpe.github.io/gopi/
-	For Licensing and Usage information, please see LICENSE.md
+	For Licensing and Usage information, please see LICENSE file
 */
 
 package influxpi
@@ -32,6 +31,9 @@ type RetentionPolicy struct {
 
 // GetRetentionPolicies enumerates the retention policies for a database
 func (this *Client) GetRetentionPolicies() (map[string]*RetentionPolicy, error) {
+	if this.client == nil {
+		return nil, ErrNotConnected
+	}
 	response, err := this.Query("SHOW RETENTION POLICIES")
 	if err != nil {
 		return nil, err
@@ -158,18 +160,48 @@ func (this *Client) CreateRetentionPolicy(name string, policy *RetentionPolicy) 
 }
 
 func (this *Client) SetRetentionPolicyDefault(name string) error {
-	// TODO
-	return ErrNotConnected
+	if this.client == nil {
+		return ErrNotConnected
+	}
+	q := "ALTER RETENTION POLICY " + QuoteIdentifier(name)
+	if this.database != "" {
+		q = q + " ON " + QuoteIdentifier(this.database)
+	}
+	q = q + " DEFAULT"
+	if _, err := this.query(q); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (this *Client) SetRetentionPolicyDuration(duration time.Duration) error {
-	// TODO
-	return ErrNotConnected
+func (this *Client) SetRetentionPolicyDuration(name string, duration time.Duration) error {
+	if this.client == nil {
+		return ErrNotConnected
+	}
+	q := "ALTER RETENTION POLICY " + QuoteIdentifier(name)
+	if this.database != "" {
+		q = q + " ON " + QuoteIdentifier(this.database)
+	}
+	q = q + " DURATION " + fmt.Sprintf("%v", duration)
+	if _, err := this.query(q); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (this *Client) SetRetentionPolicyReplicationFactor(replicationFactor int) error {
-	// TODO
-	return ErrNotConnected
+func (this *Client) SetRetentionPolicyReplicationFactor(name string, replicationFactor int) error {
+	if this.client == nil {
+		return ErrNotConnected
+	}
+	q := "ALTER RETENTION POLICY " + QuoteIdentifier(name)
+	if this.database != "" {
+		q = q + " ON " + QuoteIdentifier(this.database)
+	}
+	q = q + " REPLICATION " + fmt.Sprintf("%v", replicationFactor)
+	if _, err := this.query(q); err != nil {
+		return err
+	}
+	return nil
 }
 
 ////////////////////////////////////////////////////////////////////////////////

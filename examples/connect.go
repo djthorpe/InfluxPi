@@ -46,17 +46,24 @@ func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
 		}
 
 		// Retrieve measurements if database is set
-		if measurements, err := client.(*influx.Client).GetMeasurements(); err != nil {
+		if measurements, err := client.(*influx.Client).GetMeasurements(); err != nil && err != influx.ErrEmptyResponse {
 			return err
 		} else {
 			fmt.Println("MEASUREMENTS:", measurements)
 		}
 
 		// Retrieve retention policies
-		if policites, err := client.(*influx.Client).GetRetentionPolicies(); err != nil {
+		if policies, err := client.(*influx.Client).GetRetentionPolicies(); err != nil && err != influx.ErrEmptyResponse {
 			return err
 		} else {
-			fmt.Println("RETENTION POLICIES:", policites)
+			fmt.Println("RETENTION POLICIES:", policies)
+		}
+
+		// Show series
+		if series, err := client.(*influx.Client).ShowSeries(); err != nil {
+			return err
+		} else {
+			fmt.Println("SERIES:", series)
 		}
 
 	}
