@@ -21,7 +21,6 @@ import (
 
 // RetentionPolicy defines a period of time to store measurement data for
 type RetentionPolicy struct {
-	Name               string
 	Duration           time.Duration
 	ShardGroupDuration time.Duration
 	ReplicationFactor  int
@@ -53,8 +52,6 @@ func (this *Client) GetRetentionPolicies() (map[string]*RetentionPolicy, error) 
 		if name, ok = hash["name"].(string); ok == false {
 			this.log.Debug("Invalid name parameter")
 			return nil, ErrUnexpectedResponse
-		} else {
-			policy.Name = name
 		}
 		if policy.Default, ok = hash["default"].(bool); ok == false {
 			this.log.Debug("Invalid default parameter")
@@ -87,11 +84,99 @@ func (this *Client) GetRetentionPolicies() (map[string]*RetentionPolicy, error) 
 	return policies, nil
 }
 
+// RetentionPolicyExists returns true if a retention policy exists or
+// it will return false
+func (this *Client) RetentionPolicyExists(name string) bool {
+	if this.client == nil {
+		return false
+	}
+	// Execute query
+	response, err := this.Query("SHOW RETENTION POLICIES")
+	if err != nil || response.Length() == 0 {
+		return false
+	}
+	// Now iterate through the retention policies
+	for i := range response.Values {
+		hash := response.Row(i)
+		if policy, ok := hash["name"].(string); ok == false {
+			return false
+		} else if policy == name {
+			return true
+		}
+	}
+	// No policy found
+	return false
+}
+
+// DropRetentionPolicy deletes a retention policy. It will not
+// currently return an error if the retention policy does not
+// already exist
+func (this *Client) DropRetentionPolicy(name, database string) error {
+	if this.client == nil {
+		return ErrNotConnected
+	}
+	if database == "" {
+		database = this.database
+	}
+	q := "DROP RETENTION POLICY " + QuoteIdentifier(name)
+	if database != "" {
+		q = q + " ON " + QuoteIdentifier(database)
+	}
+	if _, err := this.query(q); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateRetentionPolicy creates a retention policy
+func (this *Client) CreateRetentionPolicy(name string, policy *RetentionPolicy) error {
+	if this.client == nil {
+		return ErrNotConnected
+	}
+	if policy == nil {
+		return fmt.Errorf("Expected policy parameter in call to CreateRetentionPolicy")
+	}
+	if exists := this.RetentionPolicyExists(name); exists {
+		return ErrAlreadyExists
+	}
+	q := "CREATE RETENTION POLICY " + QuoteIdentifier(name)
+	if this.database != "" {
+		q = q + " ON " + QuoteIdentifier(this.database)
+	}
+	q = q + " DURATION " + fmt.Sprintf("%v", policy.Duration)
+	q = q + " REPLICATION " + fmt.Sprintf("%v", policy.ReplicationFactor)
+	if policy.ShardGroupDuration != 0 {
+		q = q + " SHARD DURATION " + fmt.Sprintf("%v", policy.ShardGroupDuration)
+	}
+	if policy.Default {
+		q = q + " DEFAULT"
+	}
+	if _, err := this.query(q); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (this *Client) SetRetentionPolicyDefault(name string) error {
+	// TODO
+	return ErrNotConnected
+}
+
+func (this *Client) SetRetentionPolicyDuration(duration time.Duration) error {
+	// TODO
+	return ErrNotConnected
+}
+
+func (this *Client) SetRetentionPolicyReplicationFactor(replicationFactor int) error {
+	// TODO
+	return ErrNotConnected
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
 func (this *RetentionPolicy) String() string {
-	return fmt.Sprintf("influxdb.RetentionPolicy{ Name=%v Duration=%v ShardGroupDuration=%v ReplicationFactor=%v Default=%v }", this.Name, this.Duration, this.ShardGroupDuration, this.ReplicationFactor, this.Default)
+	return fmt.Sprintf("influxdb.RetentionPolicy{ Duration=%v ShardGroupDuration=%v ReplicationFactor=%v Default=%v }", this.Duration, this.ShardGroupDuration, this.ReplicationFactor, this.Default)
 }
 
 ////////////////////////////////////////////////////////////////////////////////

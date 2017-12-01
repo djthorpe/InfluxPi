@@ -55,6 +55,12 @@ var (
 	// ErrNotConnected is returned when database is not connected (Close has been called)
 	ErrNotConnected = errors.New("No connection")
 
+	// ErrNotFound is returned when something expected is not found
+	ErrNotFound = errors.New("Not Found")
+
+	// ErrAlreadyExists is returned when something already exists
+	ErrAlreadyExists = errors.New("Already Exists")
+
 	// ErrUnexpectedResponse is returned when server does not return with expected data
 	ErrUnexpectedResponse = errors.New("Unexpected response from server")
 
@@ -165,7 +171,7 @@ func (this *Client) SetDatabase(name string) error {
 			}
 		}
 	}
-	return ErrEmptyResponse
+	return ErrNotFound
 }
 
 // ShowDatabases enumerates the databases
@@ -180,6 +186,24 @@ func (this *Client) ShowDatabases() ([]string, error) {
 	}
 }
 
+// DatabaseExists returns a boolean value. It will return false
+// if an error occurred
+func (this *Client) DatabaseExists(name string) bool {
+	if this.client == nil {
+		return false
+	}
+	if databases, err := this.ShowDatabases(); err != nil {
+		return false
+	} else {
+		for _, database := range databases {
+			if database == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // GetMeasurements enumerates the measurements for a database
 func (this *Client) GetMeasurements() ([]string, error) {
 	if this.client == nil {
@@ -192,23 +216,49 @@ func (this *Client) GetMeasurements() ([]string, error) {
 	}
 }
 
-// Create Database with an optional retention policy
-// CREATE DATABASE <database_name> [WITH [DURATION <duration>] [REPLICATION <n>] [SHARD DURATION <duration>] [NAME <retention-policy-name>]]
+// CreateDatabase with an optional retention policy. The retention policy will
+// always have the name 'default'
 func (this *Client) CreateDatabase(name string, policy *RetentionPolicy) error {
 	if this.client == nil {
 		return ErrNotConnected
 	}
-	q := "CREATE DATABASE \"" + name + "\""
-	this.log.Debug2(q)
-	return ErrNotConnected
+	if this.DatabaseExists(name) {
+		return ErrAlreadyExists
+	}
+	q := "CREATE DATABASE " + QuoteIdentifier(name)
+	if policy != nil {
+		q = q + " WITH"
+		if policy.Duration != 0 {
+			q = q + " DURATION " + fmt.Sprintf("%v", policy.Duration)
+		}
+		if policy.ReplicationFactor != 0 {
+			q = q + " REPLICATION " + fmt.Sprintf("%v", policy.ReplicationFactor)
+		}
+		if policy.ShardGroupDuration != 0 {
+			q = q + " SHARD DURATION " + fmt.Sprintf("%v", policy.ShardGroupDuration)
+		}
+		q = q + " NAME " + QuoteIdentifier("default")
+	}
+	if _, err := this.query(q); err != nil {
+		return err
+	}
+	return nil
 }
 
-// Delete Database
+// DropDatabase will delete a database. It will return
+// ErrNotFound if the database does not exist
 func (this *Client) DropDatabase(name string) error {
 	if this.client == nil {
 		return ErrNotConnected
 	}
-	return ErrNotConnected
+	if this.DatabaseExists(name) == false {
+		return ErrNotFound
+	}
+	q := "DROP DATABASE " + QuoteIdentifier(name)
+	if _, err := this.query(q); err != nil {
+		return err
+	}
+	return nil
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -230,6 +280,7 @@ func (this *Client) query(query string) (*client.Response, error) {
 	if this.client == nil {
 		return nil, ErrNotConnected
 	}
+	this.log.Debug2("influxdb.Query{ database=%v, q=%v }", this.database, query)
 	response, err := this.client.Query(client.Query{
 		Command:  query,
 		Database: this.database,
