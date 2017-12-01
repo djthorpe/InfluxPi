@@ -122,6 +122,7 @@ echo "Making link: ${PREFIX}/${INFLUXDB_DIST} -> ${PREFIX}/influxdb"
 cd "${PREFIX}" || exit 3
 mv "${INFLUXDB_PATH}" "." || exit 3
 rm -fr "${TEMP_DIR}" || exit 3
+rm -f "influxdb" || exit 3
 ln -s "${INFLUXDB_DIST}" influxdb || exit 3
 
 #####################################################################

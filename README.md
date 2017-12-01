@@ -16,6 +16,15 @@ The various defaults within the script can be changed. They are:
   * __INFLUXDB_URL__ where the InfluxDB binary comes from. Currently https://dl.influxdata.com/influxdb/releases/influxdb-1.4.2_linux_armhf.tar.gz
   * __PREFIX__ where the installation is made. Currently `/opt`
 
+If you then want to run the command-line client, then you can add the following
+line to your ~/.bash_profile
+
+```
+  # influxdb
+  export INFLUXDB="/opt/influxdb"
+  export PATH="${PATH}:${INFLUXDB}/usr/bin"
+```
+
 License
 -------
 
