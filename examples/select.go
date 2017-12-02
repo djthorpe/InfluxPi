@@ -1,8 +1,9 @@
-// Connect to a remote InfluxDB instance and list the databases
-// in the instance
+// Connect to a remote InfluxDB instance and query
+// values
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -13,7 +14,7 @@ import (
 
 ////////////////////////////////////////////////////////////////////////////////
 
-func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
+func GetClientConfig(app *gopi.AppInstance) influx.Config {
 	host, _ := app.AppFlags.GetString("host")
 	port, _ := app.AppFlags.GetUint("port")
 	ssl, _ := app.AppFlags.GetBool("ssl")
@@ -21,7 +22,7 @@ func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
 	password, _ := app.AppFlags.GetString("password")
 	timeout, _ := app.AppFlags.GetDuration("timeout")
 	db, _ := app.AppFlags.GetString("db")
-	if client, err := gopi.Open(influx.Config{
+	return influx.Config{
 		Host:     host,
 		Port:     port,
 		SSL:      ssl,
@@ -29,50 +30,30 @@ func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
 		Password: password,
 		Timeout:  timeout,
 		Database: db,
-	}, app.Logger); err != nil {
+	}
+}
+
+func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
+	if client, err := gopi.Open(GetClientConfig(app), app.Logger); err != nil {
 		return err
 	} else {
 		defer client.Close()
-		app.Logger.Debug("influxdb=%v", client)
 
-		// Output version
-		fmt.Println("     VERSION:", client.(*influx.Client).GetVersion())
-
-		// Retrieve databases
-		if databases, err := client.(*influx.Client).ShowDatabases(); err != nil {
-			return err
-		} else {
-			fmt.Println("   DATABASES:", databases)
+		measurement, _ := app.AppFlags.GetString("measurement")
+		//offset, _ := app.AppFlags.GetUint("offset")
+		if measurement == "" {
+			return errors.New("Missing measurement")
 		}
 
-		// Retrieve measurements if database is set
-		if measurements, err := client.(*influx.Client).GetMeasurements(); err != nil && err != influx.ErrEmptyResponse {
-			return err
-		} else {
-			fmt.Println("MEASUREMENTS:", measurements)
+		// Construct statement
+		statement := client.(*influx.Client).Select(&influx.DataSource{Measurement: measurement})
+		if limit, _ := app.AppFlags.GetUint("limit"); limit > 0 {
+			statement = statement.Limit(limit)
 		}
 
-		// Retrieve retention policies
-		if policies, err := client.(*influx.Client).GetRetentionPolicies(); err != nil && err != influx.ErrEmptyResponse {
+		if err := client.(*influx.Client).Do(statement); err != nil {
 			return err
-		} else {
-			fmt.Println("RETENTION POLICIES:", policies)
 		}
-
-		// Show series
-		if series, err := client.(*influx.Client).ShowSeries(); err != nil {
-			return err
-		} else {
-			fmt.Println("SERIES:", series)
-		}
-
-		// Show measurements
-		if measurements, err := client.(*influx.Client).ShowMeasurements(nil, nil); err != nil {
-			return err
-		} else {
-			fmt.Println("MEASUREMENTS:", measurements)
-		}
-
 	}
 
 	done <- gopi.DONE
@@ -80,14 +61,18 @@ func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
 }
 
 func registerFlags(config gopi.AppConfig) gopi.AppConfig {
-	// Register theflags
+	// Register the flags
 	config.AppFlags.FlagString("host", "localhost", "InfluxDB hostname")
 	config.AppFlags.FlagUint("port", 0, "InfluxDB port, or 0 to use the default")
 	config.AppFlags.FlagBool("ssl", false, "Use SSL")
 	config.AppFlags.FlagString("username", "", "InfluxDB username")
 	config.AppFlags.FlagString("password", "", "InfluxDB password")
 	config.AppFlags.FlagDuration("timeout", 0, "Connection timeout")
-	config.AppFlags.FlagString("db", "", "Database name")
+	config.AppFlags.FlagString("db", "", "Name of database to create")
+	config.AppFlags.FlagString("measurement", "", "Measurement")
+	config.AppFlags.FlagUint("limit", 0, "Limit number of rows returned")
+	config.AppFlags.FlagUint("offset", 0, "Offset")
+
 	// Return config
 	return config
 }

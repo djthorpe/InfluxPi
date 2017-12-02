@@ -17,8 +17,8 @@ import (
 
 // Tag defines a single key/value pair
 type Series struct {
-	Name string
-	Tags map[string]string
+	Measurement string
+	Tags        map[string]string
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -34,21 +34,58 @@ func (this *Client) ShowSeries() ([]*Series, error) {
 	}
 	// check for case where there are no series
 	if response.Length() == 0 {
-		return nil, ErrEmptyResponse
+		return []*Series{}, ErrEmptyResponse
 	}
 	// iterate through the series
 	series := make([]*Series, response.Length())
-	for i, v := range response.Values {
+	for i := range response.Values {
+		hash := response.Row(i)
 		series[i] = &Series{}
 		// TODO
-		fmt.Println(len(v))
+		fmt.Printf("%v\n", hash)
 	}
 	return series, nil
+}
+
+func (this *Client) ShowMeasurements(regexp *RegExp, offset *Offset) ([]string, error) {
+	//	SHOW MEASUREMENTS [ON <database_name>] [WITH MEASUREMENT <regular_expression>] [WHERE <tag_key> <operator> ['<tag_value>' | <regular_expression>]] [LIMIT_clause] [OFFSET_clause]
+	if this.client == nil {
+		return nil, ErrNotConnected
+	}
+	q := "SHOW MEASUREMENTS"
+	if this.database != "" {
+		q = q + " ON " + QuoteIdentifier(this.database)
+	}
+	if regexp != nil {
+		q = q + " WITH MEASUREMENT " + regexp.String()
+	}
+	if offset != nil {
+		q = q + " " + offset.String()
+	}
+	if response, err := this.Query(q); err != nil {
+		return nil, err
+	} else {
+		// check for case where there are no measurements
+		if response.Length() == 0 {
+			return []string{}, ErrEmptyResponse
+		}
+		// iterate through
+		measurements := make([]string, response.Length())
+		for i := range response.Values {
+			hash := response.Row(i)
+			if str, ok := hash["name"].(string); ok == false {
+				return nil, ErrUnexpectedResponse
+			} else {
+				measurements[i] = str
+			}
+		}
+		return measurements, nil
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
 func (s *Series) String() string {
-	return fmt.Sprintf("influxdb.Series{ Name=%v %v }", s.Name, s.Tags)
+	return fmt.Sprintf("influxdb.Series{ Measurement=%v Tags=%v }", s.Measurement, s.Tags)
 }

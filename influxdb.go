@@ -67,6 +67,9 @@ var (
 
 	// ErrEmptyResponse is returned when response does not contain any data
 	ErrEmptyResponse = errors.New("Empty response from server")
+
+	// ErrBadParameter is returned when some calling parameter is invalid
+	ErrBadParameter = errors.New("Bad Parameter")
 )
 
 ////////////////////////////////////////////////////////////////////////////////

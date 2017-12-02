@@ -8,8 +8,17 @@
 package influxpi
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
+	"text/scanner"
+)
+
+////////////////////////////////////////////////////////////////////////////////
+// GLOBALS & CONSTS
+
+const (
+	StateInit = iota
 )
 
 var (
@@ -40,4 +49,20 @@ func QuoteIdentifier(value string) string {
 	} else {
 		return "\"" + escapeString(value) + "\""
 	}
+}
+
+// UnquoteLine returns the measurement name
+func UnquoteLine(line string) (string, error) {
+	// TODO
+	var scan scanner.Scanner
+	scan.Init(strings.NewReader(line))
+	state := StateInit
+	for tok := scan.Scan(); tok != scanner.EOF; tok = scan.Scan() {
+		fmt.Printf("%s: %s\n", scan.Position, scan.TokenText())
+		switch state {
+		case StateInit:
+			continue
+		}
+	}
+	return "", ErrNotConnected
 }
