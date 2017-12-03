@@ -13,9 +13,42 @@ import (
 	"time"
 
 	gopi "github.com/djthorpe/gopi"
-	"github.com/djthorpe/influxdb"
+	influxdb "github.com/djthorpe/influxdb"
 	client "github.com/influxdata/influxdb/client/v2"
 )
+
+////////////////////////////////////////////////////////////////////////////////
+// MODULE INIT
+
+func init() {
+	gopi.RegisterModule(gopi.Module{
+		Name: "influxdb/v2",
+		Config: func(config *gopi.AppConfig) {
+			config.AppFlags.FlagString("influxdb.host", "localhost", "Host")
+			config.AppFlags.FlagUint("influxdb.port", influxdb.DefaultPortHTTP, "Port")
+			config.AppFlags.FlagBool("influxdb.ssl", false, "Use SSL")
+			config.AppFlags.FlagString("influxdb.user", "", "User")
+			config.AppFlags.FlagString("influxdb.password", "", "Password")
+			config.AppFlags.FlagDuration("influxdb.timeout", 0, "Communication timeout")
+		},
+		New: func(app *gopi.AppInstance) (gopi.Driver, error) {
+			host, _ := app.AppFlags.GetString("influxdb.host")
+			port, _ := app.AppFlags.GetUint("influxdb.port")
+			ssl, _ := app.AppFlags.GetBool("influxdb.ssl")
+			user, _ := app.AppFlags.GetString("influxdb.user")
+			password, _ := app.AppFlags.GetString("influxdb.password")
+			timeout, _ := app.AppFlags.GetDuration("influxdb.timeout")
+			return gopi.Open(Config{
+				Host:     host,
+				Port:     port,
+				SSL:      ssl,
+				Username: user,
+				Password: password,
+				Timeout:  timeout,
+			}, app.Logger)
+		},
+	})
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // TYPES

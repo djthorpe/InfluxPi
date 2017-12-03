@@ -8,12 +8,16 @@ import (
 
 	"github.com/djthorpe/gopi"
 	_ "github.com/djthorpe/gopi/sys/logger"
-	influx "github.com/djthorpe/influxdb"
+	_ "github.com/djthorpe/influxdb/v2"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
 
 func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
+	return nil
+}
+
+/*
 	host, _ := app.AppFlags.GetString("host")
 	port, _ := app.AppFlags.GetUint("port")
 	ssl, _ := app.AppFlags.GetBool("ssl")
@@ -78,16 +82,10 @@ func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
 	done <- gopi.DONE
 	return nil
 }
+*/
 
 func registerFlags(config gopi.AppConfig) gopi.AppConfig {
-	// Register theflags
-	config.AppFlags.FlagString("host", "localhost", "InfluxDB hostname")
-	config.AppFlags.FlagUint("port", 0, "InfluxDB port, or 0 to use the default")
-	config.AppFlags.FlagBool("ssl", false, "Use SSL")
-	config.AppFlags.FlagString("username", "", "InfluxDB username")
-	config.AppFlags.FlagString("password", "", "InfluxDB password")
-	config.AppFlags.FlagDuration("timeout", 0, "Connection timeout")
-	config.AppFlags.FlagString("db", "", "Database name")
+	// Register the flags
 	// Return config
 	return config
 }
@@ -95,8 +93,10 @@ func registerFlags(config gopi.AppConfig) gopi.AppConfig {
 ////////////////////////////////////////////////////////////////////////////////
 
 func main_inner() int {
+	// Set application configuration
+	config := gopi.NewAppConfig("influxdb/v2")
 	// Create the application with an empty configuration
-	app, err := gopi.NewAppInstance(registerFlags(gopi.NewAppConfig()))
+	app, err := gopi.NewAppInstance(registerFlags(config))
 	if err != nil {
 		if err != gopi.ErrHelp {
 			fmt.Fprintln(os.Stderr, err)
