@@ -77,6 +77,8 @@ type RetentionPolicy struct {
 // Result reflects the influxdb model.Row structure but which defines a number
 // of additional methods
 type Result struct {
+	Result  int
+	Series  int
 	Name    string
 	Tags    map[string]string
 	Columns []string
@@ -88,10 +90,20 @@ type Result struct {
 // is selected)
 type Results []*Result
 
+// Value is a value returned by influxdb
+type Value interface{}
+
+// Measurement defines a measurement
+type Measurement struct {
+	Name     string
+	Database string
+	Policy   string
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // INTERFACES
 
-// Abstract driver interface
+// Driver is the abstract driver interface
 type Driver interface {
 	gopi.Driver
 
@@ -107,17 +119,28 @@ type Driver interface {
 	CreateRetentionPolicy(name string, policy *RetentionPolicy) error
 	DropDatabase(name string) error
 	DropRetentionPolicy(name string) error
+	RetentionPolicies() (map[string]*RetentionPolicy, error)
 
 	// Excute a query
 	Do(query Query) (Results, error)
 }
 
-// Abstract InfluxQL statement interface
+// Query is the abstract InfluxQL statement interface
 type Query interface {
 	// Set parameters
 	Database(value string) Query
 	RetentionPolicy(value *RetentionPolicy) Query
+	Default(value bool) Query
+	Measurement(values ...*Measurement) Query
+	OffsetLimit(offset uint, limit uint) Query
+	Filter(values ...Predicate) Query
 
 	// Return the query as a string
+	String() string
+}
+
+// Predicate is an abstract predicate (a tag, a field or a function)
+type Predicate interface {
+	// Return the predicate as a string
 	String() string
 }

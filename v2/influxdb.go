@@ -6,14 +6,14 @@
 	For Licensing and Usage information, please see LICENSE file
 */
 
-package influxdb
+package v2
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	gopi "github.com/djthorpe/gopi"
+	"github.com/djthorpe/influxdb"
 	client "github.com/influxdata/influxdb/client/v2"
 )
 
@@ -42,53 +42,6 @@ type Client struct {
 	client    client.Client
 	version   string
 }
-
-////////////////////////////////////////////////////////////////////////////////
-// CONSTANTS
-
-const (
-	// DefaultPortHTTP defines the default InfluxDB port used for HTTP
-	DefaultPortHTTP uint = 8086
-)
-
-const (
-	PRECISION_NANO    string = "ns"
-	PRECISION_MICRO   string = "µ"
-	PRECISION_MICRO2  string = "u"
-	PRECISION_MILLI   string = "ms"
-	PRECISION_SECOND  string = "s"
-	PRECISION_MINUTE  string = "m"
-	PRECISION_HOUR    string = "h"
-	PRECISION_DAY     string = "d"
-	PRECISION_WEEK    string = "w"
-	PRECISION_DEFAULT        = PRECISION_MILLI
-)
-
-////////////////////////////////////////////////////////////////////////////////
-// GLOBAL VARIABLES
-
-var (
-	// ErrNotConnected is returned when database is not connected (Close has been called)
-	ErrNotConnected = errors.New("No connection")
-
-	// ErrNotFound is returned when something expected is not found
-	ErrNotFound = errors.New("Not Found")
-
-	// ErrAlreadyExists is returned when something already exists
-	ErrAlreadyExists = errors.New("Already Exists")
-
-	// ErrUnexpectedResponse is returned when server does not return with expected data
-	ErrUnexpectedResponse = errors.New("Unexpected response from server")
-
-	// ErrEmptyResponse is returned when response does not contain any data
-	ErrEmptyResponse = errors.New("Empty response from server")
-
-	// ErrBadParameter is returned when some calling parameter is invalid
-	ErrBadParameter = errors.New("Bad Parameter")
-
-	// ErrNotSupported is returned if a feature is not yet supported
-	ErrNotSupported = errors.New("Not supported")
-)
 
 ////////////////////////////////////////////////////////////////////////////////
 // OPEN AND CLOSE
@@ -133,7 +86,7 @@ func (config Config) Open(log gopi.Logger) (gopi.Driver, error) {
 		if err := this.SetPrecision(config.Precision); err != nil {
 			return nil, err
 		} else {
-			this.SetPrecision(PRECISION_DEFAULT)
+			this.SetPrecision(influxdb.PRECISION_DEFAULT)
 		}
 	}
 
@@ -150,6 +103,7 @@ func (this *Client) Close() error {
 			return err
 		}
 		this.client = nil
+		this.database = ""
 	}
 	return nil
 }
@@ -160,16 +114,16 @@ func (config Config) addr() string {
 		method = "https"
 	}
 	if config.Port == 0 {
-		config.Port = DefaultPortHTTP
+		config.Port = influxdb.DefaultPortHTTP
 	}
 	return fmt.Sprintf("%v://%v:%v/", method, config.Host, config.Port)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// PUBLIC METHODS
+// PARAMETERS
 
-// GetVersion returns the version string for the InfluxDB
-func (this *Client) GetVersion() string {
+// Version returns the version string for the InfluxDB
+func (this *Client) Version() string {
 	if this.client == nil {
 		return ""
 	} else {
@@ -177,23 +131,33 @@ func (this *Client) GetVersion() string {
 	}
 }
 
+// Precision returns the current precision value
+func (this *Client) Precision() string {
+	if this.client == nil {
+		return ""
+	} else {
+		return this.precision
+	}
+}
+
+// SetPrecision sets precision for setting and returning timestamps
 func (this *Client) SetPrecision(value string) error {
 	switch value {
 	case
-		PRECISION_NANO, PRECISION_MICRO, PRECISION_MILLI,
-		PRECISION_SECOND, PRECISION_MINUTE, PRECISION_HOUR,
-		PRECISION_DAY, PRECISION_WEEK:
+		influxdb.PRECISION_NANO, influxdb.PRECISION_MICRO, influxdb.PRECISION_MILLI,
+		influxdb.PRECISION_SECOND, influxdb.PRECISION_MINUTE, influxdb.PRECISION_HOUR,
+		influxdb.PRECISION_DAY, influxdb.PRECISION_WEEK:
 		this.precision = value
-	case PRECISION_MICRO2:
-		this.precision = PRECISION_MICRO
+	case influxdb.PRECISION_MICRO2:
+		this.precision = influxdb.PRECISION_MICRO
 	default:
-		return ErrBadParameter
+		return influxdb.ErrBadParameter
 	}
 	return nil
 }
 
-// GetDatabase returns the current database
-func (this *Client) GetDatabase() string {
+// Database returns the current database string
+func (this *Client) Database() string {
 	if this.client == nil {
 		return ""
 	} else {
@@ -202,109 +166,134 @@ func (this *Client) GetDatabase() string {
 }
 
 // SetDatabase sets the current database to use, will
-// return ErrEmptyResponse if the database doesn't exist
+// return ErrBadParameter if the database doesn't exist,
+// or ErrNotConnected if the server is not connected
 func (this *Client) SetDatabase(name string) error {
 	if this.client == nil {
-		return ErrNotConnected
+		return influxdb.ErrNotConnected
 	}
-	if databases, err := this.ShowDatabases(); err != nil {
+	if results, err := this.Do(influxdb.ShowDatabases()); err != nil {
+		return err
+	} else if databases, err := results.Column(0, "databases", "name"); err != nil {
 		return err
 	} else {
-		for _, value := range databases {
-			if value == name {
-				this.database = value
+		for _, existing_database := range databases {
+			if name == existing_database {
+				this.database = name
 				return nil
 			}
 		}
 	}
-	return ErrNotFound
+	return influxdb.ErrBadParameter
 }
 
-// ShowDatabases enumerates the databases
-func (this *Client) ShowDatabases() ([]string, error) {
-	if this.client == nil {
-		return nil, ErrNotConnected
-	}
-	if values, err := this.queryScalar("SHOW DATABASES", "databases", "name"); err != nil {
-		return nil, err
-	} else {
-		return values, nil
-	}
-}
+////////////////////////////////////////////////////////////////////////////////
+// Convenience methods for database and retention policy
 
-// DatabaseExists returns a boolean value. It will return false
-// if an error occurred
-func (this *Client) DatabaseExists(name string) bool {
+func (this *Client) CreateDatabase(name string, policy *influxdb.RetentionPolicy) error {
 	if this.client == nil {
-		return false
+		return influxdb.ErrNotConnected
 	}
-	if databases, err := this.ShowDatabases(); err != nil {
-		return false
-	} else {
-		for _, database := range databases {
-			if database == name {
-				return true
-			}
-		}
+	// Check for existence of database
+	if exists, err := this.exists_string(influxdb.ShowDatabases(), "databases", "name", name); err != nil {
+		return err
+	} else if exists {
+		return influxdb.ErrAlreadyExists
 	}
-	return false
-}
-
-// GetMeasurements enumerates the measurements for a database
-func (this *Client) GetMeasurements() ([]string, error) {
-	if this.client == nil {
-		return nil, ErrNotConnected
-	}
-	if values, err := this.queryScalar("SHOW MEASUREMENTS", "measurements", "name"); err != nil {
-		return nil, err
-	} else {
-		return values, nil
-	}
-}
-
-// CreateDatabase with an optional retention policy. The retention policy will
-// always have the name 'default'
-func (this *Client) CreateDatabase(name string, policy *RetentionPolicy) error {
-	if this.client == nil {
-		return ErrNotConnected
-	}
-	if this.DatabaseExists(name) {
-		return ErrAlreadyExists
-	}
-	q := "CREATE DATABASE " + QuoteIdentifier(name)
-	if policy != nil {
-		q = q + " WITH"
-		if policy.Duration != 0 {
-			q = q + " DURATION " + fmt.Sprintf("%v", policy.Duration)
-		}
-		if policy.ReplicationFactor != 0 {
-			q = q + " REPLICATION " + fmt.Sprintf("%v", policy.ReplicationFactor)
-		}
-		if policy.ShardGroupDuration != 0 {
-			q = q + " SHARD DURATION " + fmt.Sprintf("%v", policy.ShardGroupDuration)
-		}
-		q = q + " NAME " + QuoteIdentifier("default")
-	}
-	if _, err := this.query(q); err != nil {
+	// Perform the creation
+	if _, err := this.Do(influxdb.CreateDatabase(name).RetentionPolicy(policy)); err != nil && err != influxdb.ErrEmptyResponse {
 		return err
 	}
 	return nil
 }
 
-// DropDatabase will delete a database. It will return
-// ErrNotFound if the database does not exist
 func (this *Client) DropDatabase(name string) error {
 	if this.client == nil {
-		return ErrNotConnected
+		return influxdb.ErrNotConnected
 	}
-	if this.DatabaseExists(name) == false {
-		return ErrNotFound
-	}
-	q := "DROP DATABASE " + QuoteIdentifier(name)
-	if _, err := this.query(q); err != nil {
+	// Perform the drop
+	if _, err := this.Do(influxdb.DropDatabase(name)); err != nil && err != influxdb.ErrEmptyResponse {
 		return err
 	}
 	return nil
+}
+
+func (this *Client) CreateRetentionPolicy(name string, policy *influxdb.RetentionPolicy) error {
+	if this.client == nil {
+		return influxdb.ErrNotConnected
+	}
+	// Check for existence of database
+	if exists, err := this.exists_string(influxdb.ShowRetentionPolicies(), "", "name", name); err != nil {
+		return err
+	} else if exists {
+		return influxdb.ErrAlreadyExists
+	}
+	// Perform the creation
+	if _, err := this.Do(influxdb.CreateRetentionPolicy(this.database, name, policy)); err != nil && err != influxdb.ErrEmptyResponse {
+		return err
+	}
+	// Success
+	return nil
+}
+
+func (this *Client) DropRetentionPolicy(name string) error {
+	if this.client == nil {
+		return influxdb.ErrNotConnected
+	}
+	// Perform the drop
+	if _, err := this.Do(influxdb.DropRetentionPolicy(this.database, name)); err != nil && err != influxdb.ErrEmptyResponse {
+		return err
+	}
+	return nil
+}
+
+func (this *Client) RetentionPolicies() (map[string]*influxdb.RetentionPolicy, error) {
+	if this.client == nil {
+		return nil, influxdb.ErrNotConnected
+	}
+	// Perform the query
+	if results, err := this.Do(influxdb.ShowRetentionPolicies()); err != nil {
+		return nil, err
+	} else if len(results) != 1 {
+		return nil, influxdb.ErrUnexpectedResponse
+	} else {
+		return results[0].ParseRetentionPolicies()
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Execute queries and re-format results
+
+func (this *Client) Do(query influxdb.Query) (influxdb.Results, error) {
+	if this.client == nil {
+		return nil, influxdb.ErrNotConnected
+	}
+	// Query and sanity check the response
+	response, err := this.query(query.String())
+	if err != nil {
+		return nil, err
+	}
+	if len(response.Results) == 0 {
+		return nil, influxdb.ErrEmptyResponse
+	}
+	if response.Results[0].Series == nil || len(response.Results[0].Series) == 0 {
+		return nil, influxdb.ErrEmptyResponse
+	}
+	r := make([]*influxdb.Result, 0, len(response.Results))
+	for i, result := range response.Results {
+		for j, series := range result.Series {
+			table := new(influxdb.Result)
+			table.Result = i
+			table.Series = j
+			table.Name = series.Name
+			table.Tags = series.Tags
+			table.Columns = series.Columns
+			table.Values = series.Values
+			table.Partial = series.Partial
+			r = append(r, table)
+		}
+	}
+	return influxdb.Results(r), nil
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -312,7 +301,7 @@ func (this *Client) DropDatabase(name string) error {
 
 func (this *Client) String() string {
 	if this.client != nil {
-		return fmt.Sprintf("influxdb.Client{ connected=true addr=%v%v version=%v precision=%v }", this.addr, this.database, this.GetVersion(), this.precision)
+		return fmt.Sprintf("influxdb.Client{ connected=true addr=%v%v version=%v precision=%v }", this.addr, this.database, this.Version(), this.precision)
 	} else {
 		return fmt.Sprintf("influxdb.Client{ connected=false addr=%v%v precision=%v }", this.addr, this.database, this.precision)
 	}
@@ -323,9 +312,6 @@ func (this *Client) String() string {
 
 // Query database and return response or error
 func (this *Client) query(query string) (*client.Response, error) {
-	if this.client == nil {
-		return nil, ErrNotConnected
-	}
 	if this.database != "" {
 		this.log.Debug("<influxdb.Query>{ database=%v, q=%v }", this.database, query)
 	} else {
@@ -345,64 +331,17 @@ func (this *Client) query(query string) (*client.Response, error) {
 	return response, nil
 }
 
-// queryTable returns a table structure
-func (this *Client) Query(query string) (*Table, error) {
-	// Query and sanity check the response
-	response, err := this.query(query)
-	if err != nil {
-		return nil, err
-	}
-	if len(response.Results) != 1 {
-		return nil, ErrEmptyResponse
-	}
-	if response.Results[0].Series == nil || len(response.Results[0].Series) == 0 {
-		return nil, ErrEmptyResponse
-	}
-
-	// Don't support multiple resultsets
-	if len(response.Results[0].Series) > 1 {
-		this.log.Error("Multiple Results is not supported yet")
-		return nil, ErrNotSupported
-	}
-
-	// Copy model.Row over to Table structure
-	series := response.Results[0].Series[0]
-	table := new(Table)
-	table.Name = series.Name
-	table.Tags = series.Tags
-	table.Columns = series.Columns
-	table.Values = series.Values
-	table.Partial = series.Partial
-	return table, nil
-}
-
-// queryScalar returns a single column of string values
-func (this *Client) queryScalar(query, dataset, column string) ([]string, error) {
-	// Query and sanity check the response
-	table, err := this.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	// Sanity check the data returned
-	if table.Name != dataset {
-		return nil, ErrUnexpectedResponse
-	}
-	if len(table.Columns) != 1 && table.Columns[0] != column {
-		return nil, ErrUnexpectedResponse
-	}
-
-	values := make([]string, 0, len(table.Values))
-	for _, column := range table.Values {
-		if len(column) != 1 {
-			return nil, ErrUnexpectedResponse
+func (this *Client) exists_string(q influxdb.Query, series string, column string, value string) (bool, error) {
+	if response, err := this.Do(q); err != nil {
+		return false, err
+	} else if column, err := response.Column(0, series, column); err != nil {
+		return false, err
+	} else {
+		for _, v := range column {
+			if v == value {
+				return true, nil
+			}
 		}
-		if value, ok := column[0].(string); ok == false {
-			return nil, ErrUnexpectedResponse
-		} else {
-			values = append(values, value)
-		}
-
+		return false, nil
 	}
-
-	return values, nil
 }

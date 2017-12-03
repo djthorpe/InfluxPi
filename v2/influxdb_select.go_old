@@ -1,0 +1,357 @@
+/*
+	InfluxDB client
+	(c) Copyright David Thorpe 2017
+	All Rights Reserved
+
+	For Licensing and Usage information, please see LICENSE file
+*/
+
+package influxdb
+
+import (
+	"fmt"
+	"strings"
+)
+
+////////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+type RegExp struct {
+	Value string
+}
+
+type offsetlimit struct {
+	Limit  uint
+	Offset uint
+}
+
+type columns struct {
+	value string
+}
+
+type DataSource struct {
+	Measurement     string
+	Database        string
+	RetentionPolicy string
+}
+
+type s struct {
+	d []*DataSource
+	c *columns
+	o *offsetlimit
+}
+
+type Statement interface {
+	// Set columns
+	Columns(string) Statement
+
+	// Set offset and limit
+	Offset(uint) Statement
+	Limit(uint) Statement
+
+	// Write out statement
+	Statement() string
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// CONSTRUCTORS
+
+// Select returns a select statement
+func (this *Client) Select(from ...*DataSource) Statement {
+	if len(from) == 0 {
+		this.log.Error("Call to Select requires at least one data source")
+		return nil
+	}
+	return &s{
+		d: from,
+	}
+}
+
+func (this *Client) Do(statement Statement) (*Table, error) {
+	if this.client == nil {
+		return nil, ErrNotConnected
+	}
+	// Execute query
+	if response, err := this.Query(statement.Statement()); err != nil {
+		return nil, err
+	} else {
+		return response, nil
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// STATEMENT IMPLEMENTATION FOR SELECT
+
+func (this *s) Limit(limit uint) Statement {
+	if this.o == nil {
+		this.o = &offsetlimit{Limit: limit}
+	} else {
+		this.o.Limit = limit
+	}
+	return this
+}
+
+func (this *s) Offset(offset uint) Statement {
+	if this.o == nil {
+		this.o = &offsetlimit{Offset: offset}
+	} else {
+		this.o.Offset = offset
+	}
+	return this
+}
+
+func (this *s) Columns(value string) Statement {
+	if value == "" {
+		this.c = nil
+	} else {
+		this.c = &columns{value}
+	}
+	return this
+}
+
+func (this *s) Statement() string {
+	q := "SELECT "
+	// COLUMNS
+	if this.c != nil {
+		q = q + this.c.String()
+	} else {
+		q = q + "*"
+	}
+	// DATA SOURCES
+	if len(this.d) > 0 {
+		q = q + " FROM "
+		for i := range this.d {
+			q = q + this.d[i].String() + ","
+		}
+		q = strings.TrimSuffix(q, ",")
+	}
+	// LIMIT and OFFSET
+	if this.o != nil {
+		q = q + " " + this.o.String()
+	}
+
+	return q
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// STRINGIFY
+
+func (o *offsetlimit) String() string {
+	if o.Limit == 0 && o.Offset == 0 {
+		return ""
+	}
+	s := ""
+	if o.Limit > 0 {
+		s = s + fmt.Sprintf(" LIMIT %v", o.Limit)
+	}
+	if o.Offset > 0 {
+		s = s + fmt.Sprintf(" OFFSET %v", o.Offset)
+	}
+	return strings.TrimSpace(s)
+}
+
+func (r *RegExp) String() string {
+	return r.Value
+}
+
+func (c *columns) String() string {
+	if c.value == "" {
+		return "*"
+	} else {
+		return c.value
+	}
+}
+
+func (f *DataSource) String() string {
+	parts := make([]string, 0, 3)
+	if f.Database != "" {
+		parts = append(parts, QuoteIdentifier(f.Database))
+	}
+	if f.RetentionPolicy != "" {
+		parts = append(parts, QuoteIdentifier(f.RetentionPolicy))
+	} else if f.Database != "" {
+		parts = append(parts, "")
+	}
+	if f.Measurement != "" {
+		parts = append(parts, QuoteIdentifier(f.Measurement))
+	}
+	return strings.Join(parts, ".")
+}
+
+/*
+// ShowDatabases enumerates the databases
+func (this *Client) ShowDatabases() ([]string, error) {
+	if this.client == nil {
+		return nil, ErrNotConnected
+	}
+	if values, err := this.queryScalar("SHOW DATABASES", "databases", "name"); err != nil {
+		return nil, err
+	} else {
+		return values, nil
+	}
+}
+
+// DatabaseExists returns a boolean value. It will return false
+// if an error occurred
+func (this *Client) DatabaseExists(name string) bool {
+	if this.client == nil {
+		return false
+	}
+	if databases, err := this.ShowDatabases(); err != nil {
+		return false
+	} else {
+		for _, database := range databases {
+			if database == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// GetMeasurements enumerates the measurements for a database
+func (this *Client) GetMeasurements() ([]string, error) {
+	if this.client == nil {
+		return nil, ErrNotConnected
+	}
+	if values, err := this.queryScalar("SHOW MEASUREMENTS", "measurements", "name"); err != nil {
+		return nil, err
+	} else {
+		return values, nil
+	}
+}
+
+// CreateDatabase with an optional retention policy. The retention policy will
+// always have the name 'default'
+func (this *Client) CreateDatabase(name string, policy *RetentionPolicy) error {
+	if this.client == nil {
+		return ErrNotConnected
+	}
+	if this.DatabaseExists(name) {
+		return ErrAlreadyExists
+	}
+	q := "CREATE DATABASE " + QuoteIdentifier(name)
+	if policy != nil {
+		q = q + " WITH"
+		if policy.Duration != 0 {
+			q = q + " DURATION " + fmt.Sprintf("%v", policy.Duration)
+		}
+		if policy.ReplicationFactor != 0 {
+			q = q + " REPLICATION " + fmt.Sprintf("%v", policy.ReplicationFactor)
+		}
+		if policy.ShardGroupDuration != 0 {
+			q = q + " SHARD DURATION " + fmt.Sprintf("%v", policy.ShardGroupDuration)
+		}
+		q = q + " NAME " + QuoteIdentifier("default")
+	}
+	if _, err := this.query(q); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DropDatabase will delete a database. It will return
+// ErrNotFound if the database does not exist
+func (this *Client) DropDatabase(name string) error {
+	if this.client == nil {
+		return ErrNotConnected
+	}
+	if this.DatabaseExists(name) == false {
+		return ErrNotFound
+	}
+	q := "DROP DATABASE " + QuoteIdentifier(name)
+	if _, err := this.query(q); err != nil {
+		return err
+	}
+	return nil
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+// Query database and return response or error
+func (this *Client) query(query string) (*client.Response, error) {
+	if this.client == nil {
+		return nil, ErrNotConnected
+	}
+	if this.database != "" {
+		this.log.Debug("<influxdb.Query>{ database=%v, q=%v }", this.database, query)
+	} else {
+		this.log.Debug("<influxdb.Query>{ database=<nil>, q=%v }", query)
+	}
+	response, err := this.client.Query(client.Query{
+		Command:   query,
+		Database:  this.database,
+		Precision: this.precision,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if response.Error() != nil {
+		return nil, response.Error()
+	}
+	return response, nil
+}
+
+// queryTable returns a table structure
+func (this *Client) Query(query string) (*Table, error) {
+	// Query and sanity check the response
+	response, err := this.query(query)
+	if err != nil {
+		return nil, err
+	}
+	if len(response.Results) != 1 {
+		return nil, ErrEmptyResponse
+	}
+	if response.Results[0].Series == nil || len(response.Results[0].Series) == 0 {
+		return nil, ErrEmptyResponse
+	}
+
+	// Don't support multiple resultsets
+	if len(response.Results[0].Series) > 1 {
+		this.log.Error("Multiple Results is not supported yet")
+		return nil, ErrNotSupported
+	}
+
+	// Copy model.Row over to Table structure
+	series := response.Results[0].Series[0]
+	table := new(Table)
+	table.Name = series.Name
+	table.Tags = series.Tags
+	table.Columns = series.Columns
+	table.Values = series.Values
+	table.Partial = series.Partial
+	return table, nil
+}
+
+// queryScalar returns a single column of string values
+func (this *Client) queryScalar(query, dataset, column string) ([]string, error) {
+	// Query and sanity check the response
+	table, err := this.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	// Sanity check the data returned
+	if table.Name != dataset {
+		return nil, ErrUnexpectedResponse
+	}
+	if len(table.Columns) != 1 && table.Columns[0] != column {
+		return nil, ErrUnexpectedResponse
+	}
+
+	values := make([]string, 0, len(table.Values))
+	for _, column := range table.Values {
+		if len(column) != 1 {
+			return nil, ErrUnexpectedResponse
+		}
+		if value, ok := column[0].(string); ok == false {
+			return nil, ErrUnexpectedResponse
+		} else {
+			values = append(values, value)
+		}
+
+	}
+
+	return values, nil
+}
+*/

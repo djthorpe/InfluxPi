@@ -207,9 +207,6 @@ func (this *Client) SetRetentionPolicyReplicationFactor(name string, replication
 ////////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
-func (this *RetentionPolicy) String() string {
-	return fmt.Sprintf("influxdb.RetentionPolicy{ Duration=%v ShardGroupDuration=%v ReplicationFactor=%v Default=%v }", this.Duration, this.ShardGroupDuration, this.ReplicationFactor, this.Default)
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
