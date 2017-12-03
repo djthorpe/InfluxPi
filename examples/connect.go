@@ -1,12 +1,24 @@
-// Connect to a remote InfluxDB instance and list the databases
-// in the instance
+/*
+	InfluxDB client
+	(c) Copyright David Thorpe 2017
+	All Rights Reserved
+
+	For Licensing and Usage information, please see LICENSE file
+*/
+
+// Connect to a remote InfluxDB instance and list the databases in the instance
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
-	"github.com/djthorpe/gopi"
+	// Interfaces
+	gopi "github.com/djthorpe/gopi"
+	influxdb "github.com/djthorpe/influxdb"
+
+	// Modules
 	_ "github.com/djthorpe/gopi/sys/logger"
 	_ "github.com/djthorpe/influxdb/v2"
 )
@@ -14,34 +26,19 @@ import (
 ////////////////////////////////////////////////////////////////////////////////
 
 func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
+	if client, ok := app.Module("influxdb/v2").(influxdb.Driver); ok == false {
+		return errors.New("No influxdb driver")
+	}
+
+	// Output version
+	fmt.Println("     VERSION:", client.Version())
+
+	// Successful completion
+	done <- gopi.DONE
 	return nil
 }
 
 /*
-	host, _ := app.AppFlags.GetString("host")
-	port, _ := app.AppFlags.GetUint("port")
-	ssl, _ := app.AppFlags.GetBool("ssl")
-	username, _ := app.AppFlags.GetString("username")
-	password, _ := app.AppFlags.GetString("password")
-	timeout, _ := app.AppFlags.GetDuration("timeout")
-	db, _ := app.AppFlags.GetString("db")
-	if client, err := gopi.Open(influx.Config{
-		Host:     host,
-		Port:     port,
-		SSL:      ssl,
-		Username: username,
-		Password: password,
-		Timeout:  timeout,
-		Database: db,
-	}, app.Logger); err != nil {
-		return err
-	} else {
-		defer client.Close()
-		app.Logger.Debug("influxdb=%v", client)
-
-		// Output version
-		fmt.Println("     VERSION:", client.(*influx.Client).GetVersion())
-
 		// Retrieve databases
 		if databases, err := client.(*influx.Client).ShowDatabases(); err != nil {
 			return err
@@ -78,19 +75,15 @@ func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
 		}
 
 	}
-
-	done <- gopi.DONE
-	return nil
-}
 */
 
+////////////////////////////////////////////////////////////////////////////////
+// BOOTSTRAP THE APPLICATION
+
 func registerFlags(config gopi.AppConfig) gopi.AppConfig {
-	// Register the flags
-	// Return config
+	// Register the flags & return the configuration
 	return config
 }
-
-////////////////////////////////////////////////////////////////////////////////
 
 func main_inner() int {
 	// Set application configuration
