@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"io"
 
-	influx "github.com/djthorpe/InfluxPi"
+	"github.com/djthorpe/influxdb"
 	"github.com/olekukonko/tablewriter"
 )
 
-func RenderASCII(table *influx.Table, writer io.Writer) error {
+func RenderASCII(result *influxdb.Result, writer io.Writer) error {
 	out := tablewriter.NewWriter(writer)
-	out.SetHeader(table.Columns)
+	out.SetHeader(result.Columns)
 	out.SetAutoMergeCells(true)
-	out.SetCaption(true, table.Name)
+	out.SetCaption(true, result.Name)
 	out.SetAutoFormatHeaders(false)
-	row := make([]string, len(table.Columns))
-	for i := range table.Values {
-		out.Append(asStringArray(table.RowArray(i), row))
+	row := make([]string, len(result.Columns))
+	for i := range result.Values {
+		out.Append(asStringArray(result.Values[i], row))
 	}
 	out.Render()
 	return nil

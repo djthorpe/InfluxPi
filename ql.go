@@ -260,7 +260,11 @@ func (p *p_TagClause) String() string {
 	switch p.op {
 	case "=":
 		if len(p.value) > 1 {
-			return Quote(p.name) + " IN (TODO)"
+			values := make([]string, len(p.value))
+			for i, v := range p.value {
+				values[i] = QuoteString(v)
+			}
+			return Quote(p.name) + " IN (" + strings.Join(values, ",") + ")"
 		}
 	case "=~":
 		v := strings.Trim(p.value[0], "/")
@@ -374,6 +378,12 @@ func (q *q_Select) String() string {
 	}
 	if len(q.where) > 0 {
 		s = s + " WHERE "
+		for i, predicate := range q.where {
+			s = s + predicate.String()
+			if (i + 1) < len(q.where) {
+				s = s + " AND "
+			}
+		}
 	}
 	if q.limit > 0 {
 		s = s + " LIMIT " + fmt.Sprint(q.limit)

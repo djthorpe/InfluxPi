@@ -1,6 +1,7 @@
 package influxdb_test
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/djthorpe/gopi/sys/logger"
 	"github.com/djthorpe/influxdb"
 	"github.com/djthorpe/influxdb/mock"
+	"github.com/djthorpe/influxdb/tablewriter"
 	"github.com/djthorpe/influxdb/v2"
 )
 
@@ -573,5 +575,22 @@ func TestWhere_001(t *testing.T) {
 	}
 	if where := influxdb.TagEquals("name", "a", "b"); where.String() != "name IN (\"a\",\"b\")" {
 		t.Error("Expected string, got", where.String())
+	}
+}
+
+func TestWhere_002(t *testing.T) {
+	db := "_internal"
+	if driver := Driver(t, db); driver == nil {
+		t.Error("nil driver returned")
+	} else {
+		defer driver.Close()
+		s := influxdb.Select(&influxdb.Measurement{Name: "httpd"}).OffsetLimit(0, 10)
+		//s = s.Filter(influxdb.TagEquals("time", "some time"))
+		if response, err := driver.Do(s); err != nil {
+			t.Error(err)
+		} else {
+			// Output table to screen
+			tablewriter.RenderASCII(response[0], os.Stdout)
+		}
 	}
 }
