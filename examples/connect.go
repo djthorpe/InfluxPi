@@ -26,12 +26,12 @@ import (
 ////////////////////////////////////////////////////////////////////////////////
 
 func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
-	if client, ok := app.Module("influxdb/v2").(influxdb.Driver); ok == false {
+	if client, ok := app.ModuleInstance("influxdb/v2").(influxdb.Driver); ok == false {
 		return errors.New("No influxdb driver")
+	} else {
+		// Output version
+		fmt.Println("     VERSION:", client.Version())
 	}
-
-	// Output version
-	fmt.Println("     VERSION:", client.Version())
 
 	// Successful completion
 	done <- gopi.DONE
