@@ -1,4 +1,4 @@
-package influxpi_test
+package influxdb_test
 
 import (
 	"testing"

@@ -6,7 +6,7 @@
 	For Licensing and Usage information, please see LICENSE file
 */
 
-package influxpi
+package influxdb
 
 import (
 	"encoding/json"

@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 
-	influx "github.com/djthorpe/InfluxPi"
 	tablewriter "github.com/djthorpe/InfluxPi/tablewriter"
 	"github.com/djthorpe/gopi"
 	_ "github.com/djthorpe/gopi/sys/logger"
+	influx "github.com/djthorpe/influxdb"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
