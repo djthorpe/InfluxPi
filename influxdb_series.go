@@ -47,7 +47,7 @@ func (this *Client) ShowSeries() ([]*Series, error) {
 	return series, nil
 }
 
-func (this *Client) ShowMeasurements(regexp *RegExp, offset *Offset) ([]string, error) {
+func (this *Client) ShowMeasurements(regexp *RegExp) ([]string, error) {
 	//	SHOW MEASUREMENTS [ON <database_name>] [WITH MEASUREMENT <regular_expression>] [WHERE <tag_key> <operator> ['<tag_value>' | <regular_expression>]] [LIMIT_clause] [OFFSET_clause]
 	if this.client == nil {
 		return nil, ErrNotConnected
@@ -58,9 +58,6 @@ func (this *Client) ShowMeasurements(regexp *RegExp, offset *Offset) ([]string, 
 	}
 	if regexp != nil {
 		q = q + " WITH MEASUREMENT " + regexp.String()
-	}
-	if offset != nil {
-		q = q + " " + offset.String()
 	}
 	if response, err := this.Query(q); err != nil {
 		return nil, err

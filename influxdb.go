@@ -22,23 +22,25 @@ import (
 
 // Config defines the configuration parameters for connecting to Influx Database
 type Config struct {
-	Host     string
-	Port     uint
-	SSL      bool
-	Database string
-	Username string
-	Password string
-	Timeout  time.Duration
+	Host      string
+	Port      uint
+	SSL       bool
+	Database  string
+	Username  string
+	Password  string
+	Precision string
+	Timeout   time.Duration
 }
 
 // Client defines a connection to an Influx Database
 type Client struct {
-	log      gopi.Logger
-	database string
-	addr     string
-	config   client.HTTPConfig
-	client   client.Client
-	version  string
+	log       gopi.Logger
+	database  string
+	addr      string
+	config    client.HTTPConfig
+	precision string
+	client    client.Client
+	version   string
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -47,6 +49,19 @@ type Client struct {
 const (
 	// DefaultPortHTTP defines the default InfluxDB port used for HTTP
 	DefaultPortHTTP uint = 8086
+)
+
+const (
+	PRECISION_NANO    string = "ns"
+	PRECISION_MICRO   string = "µ"
+	PRECISION_MICRO2  string = "u"
+	PRECISION_MILLI   string = "ms"
+	PRECISION_SECOND  string = "s"
+	PRECISION_MINUTE  string = "m"
+	PRECISION_HOUR    string = "h"
+	PRECISION_DAY     string = "d"
+	PRECISION_WEEK    string = "w"
+	PRECISION_DEFAULT        = PRECISION_MILLI
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -70,6 +85,9 @@ var (
 
 	// ErrBadParameter is returned when some calling parameter is invalid
 	ErrBadParameter = errors.New("Bad Parameter")
+
+	// ErrNotSupported is returned if a feature is not yet supported
+	ErrNotSupported = errors.New("Not supported")
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -107,6 +125,15 @@ func (config Config) Open(log gopi.Logger) (gopi.Driver, error) {
 	if config.Database != "" {
 		if err := this.SetDatabase(config.Database); err != nil {
 			return nil, this.log.Error("Unknown database: %v", config.Database)
+		}
+	}
+
+	// Set precision
+	if config.Precision != "" {
+		if err := this.SetPrecision(config.Precision); err != nil {
+			return nil, err
+		} else {
+			this.SetPrecision(PRECISION_DEFAULT)
 		}
 	}
 
@@ -148,6 +175,21 @@ func (this *Client) GetVersion() string {
 	} else {
 		return this.version
 	}
+}
+
+func (this *Client) SetPrecision(value string) error {
+	switch value {
+	case
+		PRECISION_NANO, PRECISION_MICRO, PRECISION_MILLI,
+		PRECISION_SECOND, PRECISION_MINUTE, PRECISION_HOUR,
+		PRECISION_DAY, PRECISION_WEEK:
+		this.precision = value
+	case PRECISION_MICRO2:
+		this.precision = PRECISION_MICRO
+	default:
+		return ErrBadParameter
+	}
+	return nil
 }
 
 // GetDatabase returns the current database
@@ -270,9 +312,9 @@ func (this *Client) DropDatabase(name string) error {
 
 func (this *Client) String() string {
 	if this.client != nil {
-		return fmt.Sprintf("influxdb.Client{ connected=true addr=%v%v version=%v }", this.addr, this.database, this.GetVersion())
+		return fmt.Sprintf("influxdb.Client{ connected=true addr=%v%v version=%v precision=%v }", this.addr, this.database, this.GetVersion(), this.precision)
 	} else {
-		return fmt.Sprintf("influxdb.Client{ connected=false addr=%v%v }", this.addr, this.database)
+		return fmt.Sprintf("influxdb.Client{ connected=false addr=%v%v precision=%v }", this.addr, this.database, this.precision)
 	}
 }
 
@@ -284,10 +326,15 @@ func (this *Client) query(query string) (*client.Response, error) {
 	if this.client == nil {
 		return nil, ErrNotConnected
 	}
-	this.log.Debug2("influxdb.Query{ database=%v, q=%v }", this.database, query)
+	if this.database != "" {
+		this.log.Debug("<influxdb.Query>{ database=%v, q=%v }", this.database, query)
+	} else {
+		this.log.Debug("<influxdb.Query>{ database=<nil>, q=%v }", query)
+	}
 	response, err := this.client.Query(client.Query{
-		Command:  query,
-		Database: this.database,
+		Command:   query,
+		Database:  this.database,
+		Precision: this.precision,
 	})
 	if err != nil {
 		return nil, err
@@ -310,6 +357,12 @@ func (this *Client) Query(query string) (*Table, error) {
 	}
 	if response.Results[0].Series == nil || len(response.Results[0].Series) == 0 {
 		return nil, ErrEmptyResponse
+	}
+
+	// Don't support multiple resultsets
+	if len(response.Results[0].Series) > 1 {
+		this.log.Error("Multiple Results is not supported yet")
+		return nil, ErrNotSupported
 	}
 
 	// Copy model.Row over to Table structure

@@ -9,7 +9,9 @@
 package influxpi
 
 import (
+	"encoding/json"
 	"fmt"
+	"time"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -31,6 +33,7 @@ type Table struct {
 ////////////////////////////////////////////////////////////////////////////////
 // Table methods
 
+// Length returns the number of rows in the table
 func (this *Table) Length() int {
 	return len(this.Values)
 }
@@ -44,9 +47,25 @@ func (this *Table) Row(i int) map[string]interface{} {
 	if len(this.Values[i]) != len(this.Columns) {
 		return nil
 	}
-	row := make(map[string]interface{}, len(this.Values[i]))
+	row := make(map[string]interface{}, len(this.Columns))
 	for j, name := range this.Columns {
-		row[name] = Value(this.Values[i][j])
+		row[name] = toValue(name, this.Values[i][j])
+	}
+	return row
+}
+
+// RowArray returns an array of values for a row
+func (this *Table) RowArray(i int) []interface{} {
+	// Sanity check on index parameter
+	if i < 0 || i >= len(this.Values) {
+		return nil
+	}
+	if len(this.Values[i]) != len(this.Columns) {
+		return nil
+	}
+	row := make([]interface{}, len(this.Columns))
+	for j, name := range this.Columns {
+		row[j] = toValue(name, this.Values[i][j])
 	}
 	return row
 }
@@ -57,6 +76,44 @@ func (this *Table) String() string {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Value methods
+
+func toValue(col string, value interface{}) Value {
+	switch value.(type) {
+	case json.Number:
+		if col == "time" {
+			if n, err := value.(json.Number).Float64(); err == nil {
+				secs := n / 1E3
+				return Value(time.Unix(int64(secs), 0))
+			}
+		} else if n, err := value.(json.Number).Float64(); err == nil {
+			return Value(n)
+		}
+	case string:
+		if col == "time" {
+			if t, err := time.Parse(time.RFC3339Nano, value.(string)); err == nil {
+				fmt.Println("time=", value, t)
+				return Value(t)
+			}
+		}
+	}
+	return Value(value)
+}
+
+/*
+	fmt.Println(col, value)
+	if col == "time" {
+		if str, ok := value.(string); ok == false {
+			return Value(value)
+		} else if t, err := time.Parse(time.RFC1123Z, str); err != nil {
+			return Value(value)
+		} else {
+			return Value(t)
+		}
+	} else {
+		return Value(value)
+	}
+}
+*/
 /*
 func (value Value) String() string {
 	switch value.(type) {

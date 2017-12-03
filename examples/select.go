@@ -8,6 +8,7 @@ import (
 	"os"
 
 	influx "github.com/djthorpe/InfluxPi"
+	tablewriter "github.com/djthorpe/InfluxPi/tablewriter"
 	"github.com/djthorpe/gopi"
 	_ "github.com/djthorpe/gopi/sys/logger"
 )
@@ -21,15 +22,17 @@ func GetClientConfig(app *gopi.AppInstance) influx.Config {
 	username, _ := app.AppFlags.GetString("username")
 	password, _ := app.AppFlags.GetString("password")
 	timeout, _ := app.AppFlags.GetDuration("timeout")
+	precision, _ := app.AppFlags.GetString("precision")
 	db, _ := app.AppFlags.GetString("db")
 	return influx.Config{
-		Host:     host,
-		Port:     port,
-		SSL:      ssl,
-		Username: username,
-		Password: password,
-		Timeout:  timeout,
-		Database: db,
+		Host:      host,
+		Port:      port,
+		SSL:       ssl,
+		Username:  username,
+		Password:  password,
+		Timeout:   timeout,
+		Database:  db,
+		Precision: precision,
 	}
 }
 
@@ -40,7 +43,6 @@ func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
 		defer client.Close()
 
 		measurement, _ := app.AppFlags.GetString("measurement")
-		//offset, _ := app.AppFlags.GetUint("offset")
 		if measurement == "" {
 			return errors.New("Missing measurement")
 		}
@@ -50,8 +52,15 @@ func RunLoop(app *gopi.AppInstance, done chan struct{}) error {
 		if limit, _ := app.AppFlags.GetUint("limit"); limit > 0 {
 			statement = statement.Limit(limit)
 		}
-
-		if err := client.(*influx.Client).Do(statement); err != nil {
+		if offset, _ := app.AppFlags.GetUint("offset"); offset > 0 {
+			statement = statement.Offset(offset)
+		}
+		if columns, _ := app.AppFlags.GetString("columns"); columns != "" {
+			statement = statement.Columns(columns)
+		}
+		if response, err := client.(*influx.Client).Do(statement); err != nil {
+			return err
+		} else if err := tablewriter.RenderASCII(response, os.Stdout); err != nil {
 			return err
 		}
 	}
@@ -72,6 +81,8 @@ func registerFlags(config gopi.AppConfig) gopi.AppConfig {
 	config.AppFlags.FlagString("measurement", "", "Measurement")
 	config.AppFlags.FlagUint("limit", 0, "Limit number of rows returned")
 	config.AppFlags.FlagUint("offset", 0, "Offset")
+	config.AppFlags.FlagString("columns", "", "Columns to return")
+	config.AppFlags.FlagString("precision", "", "Time precision")
 
 	// Return config
 	return config

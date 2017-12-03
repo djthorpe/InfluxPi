@@ -20,9 +20,13 @@ type RegExp struct {
 	Value string
 }
 
-type Offset struct {
+type offsetlimit struct {
 	Limit  uint
 	Offset uint
+}
+
+type columns struct {
+	value string
 }
 
 type DataSource struct {
@@ -32,12 +36,15 @@ type DataSource struct {
 }
 
 type s struct {
-	offset      *Offset
-	datasources []*DataSource
-	columns     []*Column
+	d []*DataSource
+	c *columns
+	o *offsetlimit
 }
 
 type Statement interface {
+	// Set columns
+	Columns(string) Statement
+
 	// Set offset and limit
 	Offset(uint) Statement
 	Limit(uint) Statement
@@ -45,8 +52,6 @@ type Statement interface {
 	// Write out statement
 	Statement() string
 }
-
-type Column struct{}
 
 ////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
@@ -58,40 +63,48 @@ func (this *Client) Select(from ...*DataSource) Statement {
 		return nil
 	}
 	return &s{
-		datasources: from,
+		d: from,
 	}
 }
 
-func (this *Client) Do(statement Statement) error {
+func (this *Client) Do(statement Statement) (*Table, error) {
 	if this.client == nil {
-		return ErrNotConnected
+		return nil, ErrNotConnected
 	}
 	// Execute query
 	if response, err := this.Query(statement.Statement()); err != nil {
-		return err
+		return nil, err
 	} else {
-		fmt.Println(response)
+		return response, nil
 	}
-	return nil
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // STATEMENT IMPLEMENTATION FOR SELECT
 
 func (this *s) Limit(limit uint) Statement {
-	if this.offset == nil {
-		this.offset = &Offset{Limit: limit}
+	if this.o == nil {
+		this.o = &offsetlimit{Limit: limit}
 	} else {
-		this.offset.Limit = limit
+		this.o.Limit = limit
 	}
 	return this
 }
 
 func (this *s) Offset(offset uint) Statement {
-	if this.offset == nil {
-		this.offset = &Offset{Offset: offset}
+	if this.o == nil {
+		this.o = &offsetlimit{Offset: offset}
 	} else {
-		this.offset.Offset = offset
+		this.o.Offset = offset
+	}
+	return this
+}
+
+func (this *s) Columns(value string) Statement {
+	if value == "" {
+		this.c = nil
+	} else {
+		this.c = &columns{value}
 	}
 	return this
 }
@@ -99,25 +112,22 @@ func (this *s) Offset(offset uint) Statement {
 func (this *s) Statement() string {
 	q := "SELECT "
 	// COLUMNS
-	if len(this.columns) > 0 {
-		for i := range this.columns {
-			q = q + this.columns[i].String() + ","
-		}
-		q = strings.TrimSuffix(q, ",")
+	if this.c != nil {
+		q = q + this.c.String()
 	} else {
 		q = q + "*"
 	}
 	// DATA SOURCES
-	if len(this.datasources) > 0 {
+	if len(this.d) > 0 {
 		q = q + " FROM "
-		for i := range this.datasources {
-			q = q + this.datasources[i].String() + ","
+		for i := range this.d {
+			q = q + this.d[i].String() + ","
 		}
 		q = strings.TrimSuffix(q, ",")
 	}
 	// LIMIT and OFFSET
-	if this.offset != nil {
-		q = q + " " + this.offset.String()
+	if this.o != nil {
+		q = q + " " + this.o.String()
 	}
 
 	return q
@@ -126,7 +136,7 @@ func (this *s) Statement() string {
 ////////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
-func (o *Offset) String() string {
+func (o *offsetlimit) String() string {
 	if o.Limit == 0 && o.Offset == 0 {
 		return ""
 	}
@@ -144,8 +154,12 @@ func (r *RegExp) String() string {
 	return r.Value
 }
 
-func (c *Column) String() string {
-	return "*"
+func (c *columns) String() string {
+	if c.value == "" {
+		return "*"
+	} else {
+		return c.value
+	}
 }
 
 func (f *DataSource) String() string {
