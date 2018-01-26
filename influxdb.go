@@ -124,14 +124,29 @@ type Client interface {
 	// Excute a query
 	Do(query Query) (Results, error)
 
-	// Return an empty dataset
-	NewDataset(name string) Dataset
+	// Return an empty dataset and write data
+	NewDataset(name string, fields ...string) Dataset
+	Write(Dataset) error
 }
 
 // Dataset is an abstract set of data which is written or read
 // from the database
 type Dataset interface {
+	// Dataset read operations
+	Tags() map[string]string
+	Fields() []string
+	Database() string
+	Len() uint
+	Name() string
+	Partial() bool
+	ValuesAtIndex(uint) (time.Date, []Value)
+
+	// Dataset write operations
+	SetDatabase(name string)
+	SetPrecision(value string)
 	SetTag(key, value string)
+	AddValues(values ...Value) error
+	AddValuesForTimestamp(ts time.Date, values ...Value) error
 }
 
 // Query is the abstract InfluxQL statement interface
