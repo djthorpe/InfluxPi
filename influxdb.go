@@ -103,8 +103,8 @@ type Measurement struct {
 ////////////////////////////////////////////////////////////////////////////////
 // INTERFACES
 
-// Driver is the abstract driver interface
-type Driver interface {
+// Client is the abstract driver interface
+type Client interface {
 	gopi.Driver
 
 	// Get and set parameters
@@ -123,6 +123,15 @@ type Driver interface {
 
 	// Excute a query
 	Do(query Query) (Results, error)
+
+	// Return an empty dataset
+	NewDataset(name string) Dataset
+}
+
+// Dataset is an abstract set of data which is written or read
+// from the database
+type Dataset interface {
+	SetTag(key, value string)
 }
 
 // Query is the abstract InfluxQL statement interface

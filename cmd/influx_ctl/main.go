@@ -2,54 +2,29 @@
 package main
 
 import (
+	"errors"
 	"os"
 
 	// frameworks
 	gopi "github.com/djthorpe/gopi"
-	influx "github.com/djthorpe/influxdb"
+	"github.com/djthorpe/influxdb"
 
 	// modules
 	_ "github.com/djthorpe/gopi/sys/logger"
-	v2 "github.com/djthorpe/influxdb/v2"
+	_ "github.com/djthorpe/influxdb/v2"
+)
+
+const (
+	MODULE_NAME = "influx/v2"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
-/*
-func GetClientConfig(app *gopi.AppInstance) influx.Config {
-	return
-}
-*/
-
-func GetClient(app *gopi.AppInstance) (influx.Driver, error) {
-	host, _ := app.AppFlags.GetString("influx.host")
-	port, _ := app.AppFlags.GetUint("influx.port")
-	ssl, _ := app.AppFlags.GetBool("influx.ssl")
-	username, _ := app.AppFlags.GetString("influx.user")
-	password, _ := app.AppFlags.GetString("influx.pass")
-	timeout, _ := app.AppFlags.GetDuration("influx.timeout")
-	db, _ := app.AppFlags.GetString("influx.db")
-
-	if client, err := gopi.Open(v2.Config{
-		Host:     host,
-		Port:     port,
-		SSL:      ssl,
-		Username: username,
-		Password: password,
-		Timeout:  timeout,
-		Database: db,
-	}, app.Logger); err != nil {
-		return nil, err
-	} else {
-		return client.(influx.Driver), nil
-	}
-}
 
 func MainTask(app *gopi.AppInstance, done chan<- struct{}) error {
 	// Create a client
-	if client, err := GetClient(app); err != nil {
-		return err
+	if client := app.ModuleInstance(MODULE_NAME).(influxdb.Client); client == nil {
+		return errors.New("Missing module")
 	} else {
-		defer client.Close()
 		app.Logger.Info("client=%v", client)
 	}
 
@@ -96,27 +71,7 @@ func MainTask(app *gopi.AppInstance, done chan<- struct{}) error {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-func registerFlags(config gopi.AppConfig) gopi.AppConfig {
-	// Register the flags
-	config.AppFlags.FlagString("influx.host", "localhost", "hostname")
-	config.AppFlags.FlagUint("influx.port", 0, "port")
-	config.AppFlags.FlagBool("influx.ssl", false, "Use SSL")
-	config.AppFlags.FlagString("influx.user", "", "Username")
-	config.AppFlags.FlagString("influx.pass", "", "Password")
-	config.AppFlags.FlagDuration("influx.timeout", 0, "Connection timeout")
-	config.AppFlags.FlagString("influx.db", "", "Database")
-	/*	config.AppFlags.FlagString("measurement", "", "Measurement")
-		config.AppFlags.FlagUint("limit", 0, "Limit number of rows returned")
-		config.AppFlags.FlagUint("offset", 0, "Offset")
-		config.AppFlags.FlagString("columns", "", "Columns to return")
-		config.AppFlags.FlagString("precision", "", "Time precision")
-	*/
-
-	// Return config
-	return config
-}
-
 func main() {
-	config := registerFlags(gopi.NewAppConfig())
+	config := gopi.NewAppConfig(MODULE_NAME)
 	os.Exit(gopi.CommandLineTool(config, MainTask))
 }
