@@ -133,20 +133,21 @@ type Client interface {
 // from the database
 type Dataset interface {
 	// Dataset read operations
-	Tags() map[string]string
+	Tags() []string
+	Tag(key string) string
 	Fields() []string
 	Database() string
 	Len() uint
 	Name() string
 	Partial() bool
-	ValuesAtIndex(uint) (time.Date, []Value)
+	ValuesAtIndex(uint) (time.Time, []Value)
 
 	// Dataset write operations
 	SetDatabase(name string)
 	SetPrecision(value string)
 	SetTag(key, value string)
 	AddValues(values ...Value) error
-	AddValuesForTimestamp(ts time.Date, values ...Value) error
+	AddValuesForTimestamp(ts time.Time, values ...Value) error
 }
 
 // Query is the abstract InfluxQL statement interface
