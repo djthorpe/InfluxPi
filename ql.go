@@ -58,6 +58,13 @@ type q_ShowSeries struct {
 	offset      uint
 }
 
+type q_ShowMeasurements struct {
+	database    string
+	measurement *Measurement
+	limit       uint
+	offset      uint
+}
+
 type q_Select struct {
 	measurement []*Measurement
 	where       []Predicate
@@ -84,6 +91,10 @@ func ShowRetentionPolicies() Query {
 
 func ShowSeries() Query {
 	return &q_ShowSeries{}
+}
+
+func ShowMeasurements() Query {
+	return &q_ShowMeasurements{}
 }
 
 func CreateDatabase(name string) Query {
@@ -131,6 +142,7 @@ func TagMatches(name, regexp string) Predicate {
 func (q *q_CreateDatabase) Database(value string) Query        { q.database = value; return q }
 func (q *q_DropDatabase) Database(value string) Query          { q.database = value; return q }
 func (q *q_ShowSeries) Database(value string) Query            { q.database = value; return q }
+func (q *q_ShowMeasurements) Database(value string) Query      { q.database = value; return q }
 func (q *q_ShowDatabases) Database(value string) Query         { return q }
 func (q *q_ShowRetentionPolicies) Database(value string) Query { q.database = value; return q }
 func (q *q_CreateRetentionPolicy) Database(value string) Query { q.database = value; return q }
@@ -145,6 +157,7 @@ func (q *q_CreateDatabase) RetentionPolicy(value *RetentionPolicy) Query        
 func (q *q_DropDatabase) RetentionPolicy(value *RetentionPolicy) Query          { return q }
 func (q *q_ShowDatabases) RetentionPolicy(value *RetentionPolicy) Query         { return q }
 func (q *q_ShowSeries) RetentionPolicy(value *RetentionPolicy) Query            { return q }
+func (q *q_ShowMeasurements) RetentionPolicy(value *RetentionPolicy) Query      { return q }
 func (q *q_ShowRetentionPolicies) RetentionPolicy(value *RetentionPolicy) Query { return q }
 func (q *q_CreateRetentionPolicy) RetentionPolicy(value *RetentionPolicy) Query {
 	q.policy = value
@@ -164,6 +177,7 @@ func (q *q_CreateDatabase) Default(value bool) Query        { return q }
 func (q *q_DropDatabase) Default(value bool) Query          { return q }
 func (q *q_ShowDatabases) Default(value bool) Query         { return q }
 func (q *q_ShowSeries) Default(value bool) Query            { return q }
+func (q *q_ShowMeasurements) Default(value bool) Query      { return q }
 func (q *q_ShowRetentionPolicies) Default(value bool) Query { return q }
 func (q *q_CreateRetentionPolicy) Default(value bool) Query { q.defalt = true; return q }
 func (q *q_DropRetentionPolicy) Default(value bool) Query   { return q }
@@ -178,6 +192,11 @@ func (q *q_DropDatabase) OffsetLimit(offset uint, limit uint) Query          { r
 func (q *q_ShowDatabases) OffsetLimit(offset uint, limit uint) Query         { return q }
 func (q *q_ShowRetentionPolicies) OffsetLimit(offset uint, limit uint) Query { return q }
 func (q *q_ShowSeries) OffsetLimit(offset uint, limit uint) Query {
+	q.offset = offset
+	q.limit = limit
+	return q
+}
+func (q *q_ShowMeasurements) OffsetLimit(offset uint, limit uint) Query {
 	q.offset = offset
 	q.limit = limit
 	return q
@@ -213,6 +232,14 @@ func (q *q_Select) Measurement(value ...*Measurement) Query {
 	q.measurement = value
 	return q
 }
+func (q *q_ShowMeasurements) Measurement(value ...*Measurement) Query {
+	if len(value) > 0 {
+		q.measurement = value[0]
+	} else {
+		q.measurement = nil
+	}
+	return q
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // FILTER
@@ -225,6 +252,7 @@ func (q *q_CreateRetentionPolicy) Filter(value ...Predicate) Query { return q }
 func (q *q_AlterRetentionPolicy) Filter(value ...Predicate) Query  { return q }
 func (q *q_DropRetentionPolicy) Filter(value ...Predicate) Query   { return q }
 func (q *q_ShowSeries) Filter(value ...Predicate) Query            { return q }
+func (q *q_ShowMeasurements) Filter(value ...Predicate) Query      { return q }
 func (q *q_Select) Filter(value ...Predicate) Query {
 	q.where = value
 	return q
@@ -233,12 +261,12 @@ func (q *q_Select) Filter(value ...Predicate) Query {
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
-func (p *RetentionPolicy) query(name string) string {
+func (p *RetentionPolicy) query(name string, create bool) string {
 	if p.Duration == 0 && p.ReplicationFactor == 0 && p.ShardGroupDuration == 0 {
 		return ""
 	}
 	s := make([]string, 0, 4)
-	if p.Duration != 0 {
+	if p.Duration != 0 || create {
 		s = append(s, fmt.Sprintf("DURATION %v", p.Duration))
 	}
 	if p.ReplicationFactor != 0 {
@@ -302,6 +330,23 @@ func (q *q_ShowSeries) String() string {
 	return s
 }
 
+func (q *q_ShowMeasurements) String() string {
+	s := "SHOW MEASUREMENTS"
+	if len(q.database) > 0 {
+		s = s + " ON " + Quote(q.database)
+	}
+	if q.measurement != nil {
+		s = s + " WITH MEASUREMENT " + q.measurement.String()
+	}
+	if q.limit > 0 {
+		s = s + " LIMIT " + fmt.Sprint(q.limit)
+	}
+	if q.offset > 0 {
+		s = s + " OFFSET " + fmt.Sprint(q.offset)
+	}
+	return s
+}
+
 func (q *q_ShowRetentionPolicies) String() string {
 	s := "SHOW RETENTION POLICIES"
 	if len(q.database) > 0 {
@@ -327,7 +372,7 @@ func (q *q_CreateRetentionPolicy) String() string {
 		if q.policy.ReplicationFactor == 0 {
 			q.policy.ReplicationFactor = 1
 		}
-		if p := q.policy.query(""); p != "" {
+		if p := q.policy.query("", true); p != "" {
 			s = s + " " + p
 		}
 	}
@@ -343,7 +388,7 @@ func (q *q_AlterRetentionPolicy) String() string {
 		s = s + " ON " + Quote(q.database)
 	}
 	if q.policy != nil {
-		if p := q.policy.query(""); p != "" {
+		if p := q.policy.query("", false); p != "" {
 			s = s + " " + p
 		}
 	}
@@ -356,7 +401,7 @@ func (q *q_AlterRetentionPolicy) String() string {
 func (q *q_CreateDatabase) String() string {
 	s := "CREATE DATABASE " + Quote(q.database)
 	if q.policy != nil {
-		if policy := q.policy.query(q.policyName); policy != "" {
+		if policy := q.policy.query(q.policyName, true); policy != "" {
 			s = s + " WITH " + policy
 		}
 	}
