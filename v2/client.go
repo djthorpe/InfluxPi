@@ -25,6 +25,7 @@ type Config struct {
 	Host      string
 	Port      uint
 	SSL       bool
+	SSLVerify bool
 	Database  string
 	Username  string
 	Password  string
@@ -54,10 +55,11 @@ func (config Config) Open(log gopi.Logger) (gopi.Driver, error) {
 	this.log = log
 	this.addr = config.addr()
 	this.config = client.HTTPConfig{
-		Addr:     this.addr,
-		Username: config.Username,
-		Password: config.Password,
-		Timeout:  config.Timeout,
+		Addr:               this.addr,
+		Username:           config.Username,
+		Password:           config.Password,
+		Timeout:            config.Timeout,
+		InsecureSkipVerify: (config.SSLVerify == false),
 	}
 
 	var err error

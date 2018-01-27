@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/djthorpe/gopi"
-
 	"github.com/djthorpe/influxdb"
+	v2 "github.com/influxdata/influxdb/client/v2"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -27,18 +27,23 @@ type dataset struct {
 	precision string
 	fields    []string
 	tags      map[string]string
+	points    v2.BatchPoints
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTOR
 
-// NewDataset returns an empty dataset object
-func (this *Client) NewDataset(name string, fields ...string) influxdb.Dataset {
+// NewDataset returns an empty dataset object used for writing
+func (this *Client) NewDataset(name string, fields ...string) (influxdb.Dataset, error) {
 	d := new(dataset)
 
-	// Set database and measurement name
-	d.name = name
-	d.database = this.database
+	// Set measurement name and database name
+	if this.database == "" || name == "" {
+		return nil, influxdb.ErrBadParameter
+	} else {
+		d.database = this.database
+		d.name = name
+	}
 
 	// Set precision
 	if this.precision == "" {
@@ -52,8 +57,18 @@ func (this *Client) NewDataset(name string, fields ...string) influxdb.Dataset {
 	d.fields = make([]string, 0, len(fields))
 	d.fields = append(d.fields, fields...)
 
+	// create batch points
+	if points, err := v2.NewBatchPoints(v2.BatchPointsConfig{
+		Database:  d.database,
+		Precision: d.precision,
+	}); err != nil {
+		return nil, err
+	} else {
+		d.points = points
+	}
+
 	// return dataset
-	return d
+	return d, nil
 }
 
 func (this *Client) Write(dataset influxdb.Dataset) error {
@@ -101,20 +116,6 @@ func (this *dataset) Database() string {
 	return this.database
 }
 
-// SetDatabase sets the database name
-func (this *dataset) SetDatabase(name string) {
-	this.database = name
-}
-
-// SetPrecision sets the precision for the timestamp
-func (this *dataset) SetPrecision(value string) {
-	if value == "" {
-		this.precision = influxdb.PRECISION_DEFAULT
-	} else {
-		this.precision = value
-	}
-}
-
 // Name returns the measurement name
 func (this *dataset) Name() string {
 	return this.name
@@ -140,13 +141,25 @@ func (this *dataset) ValuesAtIndex(uint) (time.Time, []influxdb.Value) {
 }
 
 func (this *dataset) AddValues(values ...influxdb.Value) error {
-	// TODO
-	return gopi.ErrNotImplemented
+	if points, err := this.valueMap(values); err != nil {
+		return err
+	} else if pt, err := v2.NewPoint(this.name, this.tags, points); err != nil {
+		return err
+	} else {
+		this.points.AddPoint(pt)
+		return nil
+	}
 }
 
 func (this *dataset) AddValuesForTimestamp(ts time.Time, values ...influxdb.Value) error {
-	// TODO
-	return gopi.ErrNotImplemented
+	if points, err := this.valueMap(values); err != nil {
+		return err
+	} else if pt, err := v2.NewPoint(this.name, this.tags, points, ts); err != nil {
+		return err
+	} else {
+		this.points.AddPoint(pt)
+		return nil
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -155,4 +168,11 @@ func (this *dataset) AddValuesForTimestamp(ts time.Time, values ...influxdb.Valu
 func (this *dataset) String() string {
 	// TODO
 	return fmt.Sprintf("influxdb.Dataset{  }")
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+func (this *dataset) valueMap(values []influxdb.Value) (map[string]interface{}, error) {
+	return nil, nil
 }

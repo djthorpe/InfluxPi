@@ -23,6 +23,7 @@ func init() {
 			config.AppFlags.FlagString("influx.host", "localhost", "Host")
 			config.AppFlags.FlagUint("influx.port", influxdb.DefaultPortHTTP, "Port")
 			config.AppFlags.FlagBool("influx.ssl", false, "Use SSL")
+			config.AppFlags.FlagBool("influx.ssl.verify", true, "Verify SSL Certificate")
 			config.AppFlags.FlagString("influx.user", "", "User")
 			config.AppFlags.FlagString("influx.password", "", "Password")
 			config.AppFlags.FlagDuration("influx.timeout", 0, "Communication timeout")
@@ -31,16 +32,18 @@ func init() {
 			host, _ := app.AppFlags.GetString("influx.host")
 			port, _ := app.AppFlags.GetUint("influx.port")
 			ssl, _ := app.AppFlags.GetBool("influx.ssl")
+			sslverify, _ := app.AppFlags.GetBool("influx.ssl.verify")
 			user, _ := app.AppFlags.GetString("influx.user")
 			password, _ := app.AppFlags.GetString("influx.password")
 			timeout, _ := app.AppFlags.GetDuration("influx.timeout")
 			return gopi.Open(Config{
-				Host:     host,
-				Port:     port,
-				SSL:      ssl,
-				Username: user,
-				Password: password,
-				Timeout:  timeout,
+				Host:      host,
+				Port:      port,
+				SSL:       ssl,
+				SSLVerify: sslverify,
+				Username:  user,
+				Password:  password,
+				Timeout:   timeout,
 			}, app.Logger)
 		},
 	})

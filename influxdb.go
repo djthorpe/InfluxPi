@@ -125,7 +125,7 @@ type Client interface {
 	Do(query Query) (Results, error)
 
 	// Return an empty dataset and write data
-	NewDataset(name string, fields ...string) Dataset
+	NewDataset(name string, fields ...string) (Dataset, error)
 	Write(Dataset) error
 }
 
@@ -136,15 +136,12 @@ type Dataset interface {
 	Tags() []string
 	Tag(key string) string
 	Fields() []string
-	Database() string
 	Len() uint
 	Name() string
 	Partial() bool
 	ValuesAtIndex(uint) (time.Time, []Value)
 
 	// Dataset write operations
-	SetDatabase(name string)
-	SetPrecision(value string)
 	SetTag(key, value string)
 	AddValues(values ...Value) error
 	AddValuesForTimestamp(ts time.Time, values ...Value) error
