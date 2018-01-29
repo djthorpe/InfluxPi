@@ -1,5 +1,4 @@
-// InfluxDB command-line tool
-package main
+package influxctl
 
 import (
 	"errors"

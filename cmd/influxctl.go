@@ -9,11 +9,13 @@ import (
 	// frameworks
 	gopi "github.com/djthorpe/gopi"
 	"github.com/djthorpe/influxdb"
-	"github.com/djthorpe/influxdb/tablewriter"
 
 	// modules
 	_ "github.com/djthorpe/gopi/sys/logger"
 	_ "github.com/djthorpe/influxdb/v2"
+
+	// local imports
+	"github.com/djthorpe/influxdb/cmd/influxctl"
 )
 
 const (
@@ -26,66 +28,18 @@ type CommandFunc func(client influxdb.Client, app *gopi.AppInstance) error
 
 var (
 	Commands = map[string]CommandFunc{
-		"Databases":      ListDatabases,
-		"CreateDatabase": CreateDatabase,
-		"DropDatabase":   DropDatabase,
-		"Policies":       ListRetentionPolicies,
-		"CreatePolicy":   CreateRetentionPolicy,
-		"DropPolicy":     DropRetentionPolicy,
-		"Series":         ListSeries,
-		"Measurements":   ListMeasurements,
-		"Query":          Query,
-		"Import":         Import,
+		"Databases":      influxctl.ListDatabases,
+		"CreateDatabase": influxctl.CreateDatabase,
+		"DropDatabase":   influxctl.DropDatabase,
+		"Policies":       influxctl.ListRetentionPolicies,
+		"CreatePolicy":   influxctl.CreateRetentionPolicy,
+		"DropPolicy":     influxctl.DropRetentionPolicy,
+		"Series":         influxctl.ListSeries,
+		"Measurements":   influxctl.ListMeasurements,
+		"Query":          influxctl.Query,
+		"Import":         influxctl.Import,
 	}
 )
-
-////////////////////////////////////////////////////////////////////////////////
-
-func Query(client influxdb.Client, app *gopi.AppInstance) error {
-	// Get flags
-	db, _ := app.AppFlags.GetString("db")
-	offset, _ := app.AppFlags.GetUint("offset")
-	limit, _ := app.AppFlags.GetUint("limit")
-
-	if db == "" {
-		return errors.New("-db flag required")
-	} else if err := client.SetDatabase(db); err != nil {
-		return err
-	} else if measurement, err := GetOneArg(app, "Measurement"); err != nil {
-		return err
-	} else {
-		q := influxdb.Select(GetMeasurement(measurement)).OffsetLimit(offset, limit)
-		if r, err := client.Do(q); err != nil {
-			return err
-		} else {
-			for _, dataset := range r {
-				tablewriter.RenderASCII(dataset, os.Stdout)
-			}
-			return nil
-		}
-	}
-}
-
-func Import(client influxdb.Client, app *gopi.AppInstance) error {
-	// Get flags
-	db, _ := app.AppFlags.GetString("db")
-
-	// Select database, retrieve measurement name
-	if db == "" {
-		return errors.New("-db flag required")
-	} else if err := client.SetDatabase(db); err != nil {
-		return err
-	} else if measurement, err := GetOneArg(app, "Measurement"); err != nil {
-		return err
-	} else if dataset, err := client.NewDataset(measurement, []string{"tag1", "tag2"}, []string{"field1", "field2"}); err != nil {
-		return err
-	} else {
-		if err := client.Write(dataset); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 

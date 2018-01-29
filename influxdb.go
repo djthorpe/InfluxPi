@@ -125,7 +125,7 @@ type Client interface {
 	Do(query Query) (Results, error)
 
 	// Return an empty dataset and write data
-	NewDataset(name string, fields ...string) (Dataset, error)
+	NewDataset(name string, tags, fields []string) (Dataset, error)
 	Write(Dataset) error
 }
 
