@@ -32,23 +32,29 @@ var (
 		"Policies":       ListRetentionPolicies,
 		"CreatePolicy":   CreateRetentionPolicy,
 		"DropPolicy":     DropRetentionPolicy,
-		"Query":          Query,
 		"Series":         ListSeries,
 		"Measurements":   ListMeasurements,
+		"Query":          Query,
+		"Import":         Import,
 	}
 )
 
 ////////////////////////////////////////////////////////////////////////////////
 
 func Query(client influxdb.Client, app *gopi.AppInstance) error {
-	// Get database flag
+	// Get flags
 	db, _ := app.AppFlags.GetString("db")
+	offset, _ := app.AppFlags.GetUint("offset")
+	limit, _ := app.AppFlags.GetUint("limit")
+
 	if db == "" {
 		return errors.New("-db flag required")
 	} else if err := client.SetDatabase(db); err != nil {
 		return err
+	} else if measurement, err := GetOneArg(app, "Measurement"); err != nil {
+		return err
 	} else {
-		q := influxdb.Select()
+		q := influxdb.Select(GetMeasurement(measurement)).OffsetLimit(offset, limit)
 		if r, err := client.Do(q); err != nil {
 			return err
 		} else {
@@ -59,6 +65,29 @@ func Query(client influxdb.Client, app *gopi.AppInstance) error {
 		}
 	}
 }
+
+func Import(client influxdb.Client, app *gopi.AppInstance) error {
+	// Get flags
+	db, _ := app.AppFlags.GetString("db")
+
+	// Select database, retrieve measurement name
+	if db == "" {
+		return errors.New("-db flag required")
+	} else if err := client.SetDatabase(db); err != nil {
+		return err
+	} else if measurement, err := GetOneArg(app, "Measurement"); err != nil {
+		return err
+	} else if dataset, err := client.NewDataset(measurement, []string{"tag1", "tag2"}, []string{"field1", "field2"}); err != nil {
+		return err
+	} else {
+		if err := client.Write(dataset); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 func GetOneArg(app *gopi.AppInstance, param1 string) (string, error) {
 	if args := app.AppFlags.Args(); len(args) < 2 {
@@ -72,6 +101,12 @@ func GetOneArg(app *gopi.AppInstance, param1 string) (string, error) {
 
 func GetPolicyValue(app *gopi.AppInstance) (*influxdb.RetentionPolicy, error) {
 	return &influxdb.RetentionPolicy{}, nil
+}
+
+func GetMeasurement(arg string) *influxdb.Measurement {
+	return &influxdb.Measurement{
+		Name: arg,
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -101,6 +136,8 @@ func main() {
 	// Configuration
 	config := gopi.NewAppConfig(MODULE_NAME)
 	config.AppFlags.FlagString("db", "", "Database name")
+	config.AppFlags.FlagUint("limit", 1000, "Row limit")
+	config.AppFlags.FlagUint("offset", 0, "Row offset")
 
 	// Run Command-Line Tool
 	os.Exit(gopi.CommandLineTool(config, MainTask))
