@@ -11,8 +11,8 @@
 #####################################################################
 
 # This is the URL for downloading the Chronograf dist
-TELEGRAF_URL="https://dl.influxdata.com/telegraf/releases/telegraf-1.4.4_linux_armhf.tar.gz"
-TELEGRAF_VERSION="1.4.4"
+TELEGRAF_URL="https://dl.influxdata.com/telegraf/releases/telegraf-1.6.0_linux_armhf.tar.gz"
+TELEGRAF_VERSION="1.6.0"
 # PREFIX is the parent directory of the influxdb setup
 PREFIX="/opt"
 # USERNAME is the username for the influx processes

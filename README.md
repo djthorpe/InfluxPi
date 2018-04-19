@@ -19,10 +19,18 @@ can be changed. They are:
 
   * __INFLUXDB_URL__ where the InfluxDB binary comes from. Currently https://dl.influxdata.com/influxdb/releases/influxdb-1.4.2_linux_armhf.tar.gz
   * __CHRONOGRAF_URL__ where the InfluxDB binary comes from. Currently https://dl.influxdata.com/chronograf/releases/chronograf-1.3.10.0_linux_armhf.tar.gz
-  * __TELEGRAF_URL__ where the InfluxDB binary comes from. Currently https://dl.influxdata.com/telegraf/releases/telegraf-1.4.4_linux_armhf.tar.gz
+  * __TELEGRAF_URL__ where the InfluxDB binary comes from. Currently https://dl.influxdata.com/telegraf/releases/telegraf-1.6.0_linux_armhf.tar.gz
   * __TELEGRAF_VERSION__ should be changed if you change the URL, due to the way that
     distributon is packaged up.
   * __PREFIX__ where the installation is made. Currently `/opt`
+
+You will need to enable the services if you want them to continue running on reboot:
+
+```
+bash% sudo systemctl enable influxdb
+bash% sudo systemctl enable telegraf
+bash% sudo systemctl enable chronograf
+```
 
 If you then want to run the command-line client, then you can add the following
 line to your ~/.bash_profile
@@ -36,7 +44,7 @@ line to your ~/.bash_profile
 License
 -------
 
-Copyright 2017 David Thorpe
+Copyright 2017-2018 David Thorpe
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
