@@ -125,8 +125,8 @@ type Client interface {
 	Do(query Query) (Results, error)
 
 	// Return an empty dataset and write data
-	NewDataset(name string, tags, fields []string) (Dataset, error)
-	Write(Dataset) error
+	//NewDataset(name string, tags, fields []string) (Dataset, error)
+	//Write(Dataset) error
 }
 
 // Dataset is an abstract set of data which is written or read

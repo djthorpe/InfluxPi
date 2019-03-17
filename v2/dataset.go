@@ -14,7 +14,7 @@ import (
 
 	"github.com/djthorpe/gopi"
 	"github.com/djthorpe/influxdb"
-	v2 "github.com/influxdata/influxdb/client/v2"
+	v2 "github.com/influxdata/influxdb1-client/v2"
 )
 
 ////////////////////////////////////////////////////////////////////////////////

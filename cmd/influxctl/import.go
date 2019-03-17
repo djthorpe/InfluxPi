@@ -1,4 +1,4 @@
-package influxctl
+package main
 
 import (
 
