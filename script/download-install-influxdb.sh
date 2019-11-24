@@ -11,7 +11,7 @@
 #####################################################################
 
 # This is the URL for downloading the InfluxDB dist
-INFLUXDB_URL="https://dl.influxdata.com/influxdb/releases/influxdb-1.4.2_linux_armhf.tar.gz"
+INFLUXDB_URL="https://dl.influxdata.com/influxdb/releases/influxdb-1.7.4_linux_armhf.tar.gz"
 # PREFIX is the parent directory of the influxdb setup
 PREFIX="/opt"
 # USERNAME is the username for the influx processes

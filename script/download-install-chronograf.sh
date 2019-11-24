@@ -11,7 +11,8 @@
 #####################################################################
 
 # This is the URL for downloading the Chronograf dist
-CHRONOGRAF_URL="https://dl.influxdata.com/chronograf/releases/chronograf-1.6.2_linux_armhf.tar.gz"
+CHRONOGRAF_VERSION="1.7.14"
+CHRONOGRAF_URL="https://dl.influxdata.com/chronograf/releases/chronograf-${CHRONOGRAF_VERSION}_linux_armhf.tar.gz"
 # PREFIX is the parent directory of the influxdb setup
 PREFIX="/opt"
 # USERNAME is the username for the influx processes
